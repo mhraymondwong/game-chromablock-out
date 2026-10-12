@@ -5,8 +5,8 @@
 .DS_Store
 user://
 *.tmp
-# Local PWA/web binaries (zip separately for hosting)
-build/pwa/*.wasm
-build/pwa/*.pck
+# Keep Godot PWA binaries tracked for GitHub Pages
+!build/pwa/*.pck
+!build/pwa/*.wasm
 build/*.zip
 *.zip
