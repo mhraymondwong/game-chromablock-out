@@ -4,10 +4,8 @@ extends Node2D
 const GAP_RATIO := 0.07  # gap relative to cell
 const MIN_TOUCH := 52.0  # modal / secondary touch targets
 const BTN_SIZE := 80.0   # bottom toolbar icon diameter (72–88)
-const GATE_PAD := 36.0   # room for glowing exit bars + arrows
+const GATE_PAD := 26.0
 const BOTTOM_PAD := 36.0 # lift toolbar off screen bottom
-const BTN_LABEL_H := 18.0  # Chinese labels under toolbar icons
-const FRAME_INSET_RATIO := 0.11  # wood frame border vs board span
 
 var font: Font
 var model: BoardModel
@@ -73,9 +71,7 @@ var tex_star_on: Texture2D
 var tex_star_off: Texture2D
 var tex_btn: Dictionary = {}  # id -> Texture2D
 var tex_btn_pressed: Dictionary = {}
-var tex_gates: Dictionary = {}  # color name -> Texture2D (legacy)
-var tex_gate_arrows: Dictionary = {}  # "side_color" -> Texture2D
-var tex_board_frame: Texture2D
+var tex_gates: Dictionary = {}  # color name -> Texture2D
 var tex_badge: Dictionary = {}  # level/time/moves/score -> Texture2D
 var tex_modal_rules: Texture2D
 var tex_modal_clear: Texture2D
@@ -107,9 +103,6 @@ func _load_ui_art() -> void:
 		tex_badge[id] = _tex("res://assets/ui/badge_%s.png" % id)
 	for c in ["red", "blue", "green", "yellow", "purple", "orange"]:
 		tex_gates[c] = _tex("res://assets/ui/gate_%s.png" % c)
-		for side in ["left", "right", "top", "bottom"]:
-			tex_gate_arrows["%s_%s" % [side, c]] = _tex("res://assets/ui/gate_arrow_%s_%s.png" % [side, c])
-	tex_board_frame = _tex("res://assets/ui/board_wood_frame.png")
 	tex_modal_rules = _tex("res://assets/ui/modal_rules.png")
 	tex_modal_clear = _tex("res://assets/ui/modal_clear.png")
 	tex_check_on = _tex("res://assets/ui/checkbox_on.png")
@@ -188,37 +181,37 @@ func _recompute_layout() -> void:
 	var play_y: float = vp.y - bottom_safe - ph
 	play_hit_rect = Rect2((vp.x - pw) * 0.5, play_y, pw, ph)
 
-	# Wooden hanging badge signs under title (mockup)
-	var badge_h: float = clampf(vp.x * 0.165, 58.0, 72.0)
-	var badge_gap: float = 6.0
+	# Colorful badge chips under title
+	var badge_h: float = clampf(vp.x * 0.145, 50.0, 60.0)
+	var badge_gap: float = 5.0
 	var badge_pad: float = 8.0
-	var badge_y: float = title_rect.position.y + title_rect.size.y + 4.0
+	var badge_y: float = title_rect.position.y + title_rect.size.y + 8.0
 	var ids_b := ["level", "time", "moves", "score"]
 	var n_b := ids_b.size()
 	var badge_w: float = (vp.x - badge_pad * 2.0 - badge_gap * float(n_b - 1)) / float(n_b)
-	badge_w = maxf(badge_w, 72.0)
+	badge_w = maxf(badge_w, 70.0)
 	badge_rects.clear()
 	var bx: float = badge_pad
 	for id in ids_b:
 		badge_rects[id] = Rect2(bx, badge_y, badge_w, badge_h)
 		bx += badge_w + badge_gap
 
-	hud_h = badge_y + badge_h + 12.0
+	hud_h = badge_y + badge_h + 10.0
 
-	# Bottom toolbar: glossy icons + Chinese labels underneath
+	# Bottom toolbar: large buttons (72–88), lifted from edge — fill width
 	var n := 5
 	var side_m: float = 8.0
 	var gap_btn: float = 8.0
+	# Compute largest icon that fits with comfortable gaps
 	var icon: float = (vp.x - side_m * 2.0 - gap_btn * float(n - 1)) / float(n)
-	icon = clampf(icon, 68.0, 84.0)
+	icon = clampf(icon, 72.0, 88.0)
+	# Recompute gap so buttons are evenly spaced across width
 	gap_btn = maxf(4.0, (vp.x - side_m * 2.0 - icon * float(n)) / float(maxi(n - 1, 1)))
 	var lift_tb: float = maxf(BOTTOM_PAD, maxf(12.0, vp.y * 0.02) + 24.0)
-	toolbar_h = icon + BTN_LABEL_H + lift_tb + 14.0
+	toolbar_h = icon + lift_tb + 16.0
 
-	# Reserve space for wood frame border + outer glowing gates
-	var side_reserve: float = GATE_PAD + 28.0
-	var avail_w: float = vp.x - margin * 2.0 - side_reserve * 2.0
-	var avail_h: float = vp.y - hud_h - toolbar_h - margin * 2.0 - side_reserve * 2.0
+	var avail_w: float = vp.x - margin * 2.0 - GATE_PAD * 2.0
+	var avail_h: float = vp.y - hud_h - toolbar_h - margin * 2.0 - GATE_PAD * 2.0
 	var board_px: float = minf(avail_w, avail_h)
 	board_px = maxf(board_px, 160.0)
 	cell = board_px / (BoardModel.SIZE + (BoardModel.SIZE - 1) * GAP_RATIO)
@@ -237,12 +230,11 @@ func _layout_bottom_toolbar(icon: float = BTN_SIZE, gap_btn: float = 8.0) -> voi
 	var n := labels.size()
 	var total_w: float = n * icon + gap_btn * float(n - 1)
 	var x: float = (vp.x - total_w) * 0.5
-	# Lift above home indicator; leave room for Chinese labels under icons
+	# Lift above home indicator / browser chrome
 	var lift: float = maxf(BOTTOM_PAD, maxf(12.0, vp.y * 0.02) + 24.0)
-	var y: float = vp.y - lift - icon - BTN_LABEL_H
+	var y: float = vp.y - lift - icon
 	for id in labels:
-		# Hit rect includes label strip below icon
-		btn_rects[id] = Rect2(x, y, icon, icon + BTN_LABEL_H)
+		btn_rects[id] = Rect2(x, y, icon, icon)
 		x += icon + gap_btn
 
 
@@ -403,30 +395,28 @@ func _draw_text(pos: Vector2, text: String, size: int, col: Color, outline: bool
 
 
 func _draw_hud() -> void:
-	# Soft fade only — keep playroom sky + rainbow visible.
+	# Soft fade only — keep playroom bg visible (no solid white bar).
 	if tex_hud != null:
 		draw_texture_rect(tex_hud, Rect2(0, 0, vp.x, hud_h), false)
 
-	# Bubble logo as header
+	# Raymond bubble logo as header (large & clear)
 	var banner: Texture2D = tex_logo if tex_logo != null else (tex_title if tex_title != null else tex_title_sm)
 	if banner != null and title_rect.size.x > 1.0:
 		draw_texture_rect(banner, title_rect, false)
 	else:
 		_draw_text(Vector2(vp.x * 0.18, 48), "彩色方塊逃脫", 28, Color(1.0, 0.42, 0.28), true)
 
-	# Wooden hanging signs: 關卡 / 時間 / 步數 / 分數
+	# Colorful cute badge chips: level / time / moves / score
 	var gold: float = float(level_data.get("gold", 60))
 	var sc: Dictionary = BoardModel.compute_score(model.moves, int(level_data.get("par", 5)), elapsed, gold, model.combo_bonus)
 	var mm := int(elapsed) / 60
 	var ss := int(elapsed) % 60
 	var time_ok: bool = elapsed <= gold
-	var wood_lab := Color(0.42, 0.26, 0.12)
-	var wood_val := Color(0.35, 0.20, 0.08)
 	var items := [
-		{"id": "level", "label": "關卡", "value": "%d/%d" % [level_index + 1, LevelData.level_count()], "lab": wood_lab, "fg": wood_val},
-		{"id": "time", "label": "時間", "value": "%02d:%02d" % [mm, ss], "lab": wood_lab, "fg": wood_val if time_ok else Color(0.75, 0.15, 0.1)},
-		{"id": "moves", "label": "步數", "value": "%d/%d" % [model.moves, int(level_data.get("par", 5))], "lab": wood_lab, "fg": wood_val},
-		{"id": "score", "label": "分數", "value": "%d" % int(sc.total), "lab": wood_lab, "fg": wood_val},
+		{"id": "level", "label": "關卡", "value": "%d/%d" % [level_index + 1, LevelData.level_count()], "lab": Color(0.45, 0.1, 0.28), "fg": Color(0.35, 0.05, 0.2)},
+		{"id": "time", "label": "時間", "value": "%02d:%02d" % [mm, ss], "lab": Color(0.05, 0.35, 0.28), "fg": Color(0.05, 0.32, 0.25) if time_ok else Color(0.7, 0.12, 0.08)},
+		{"id": "moves", "label": "步數", "value": "%d/%d" % [model.moves, int(level_data.get("par", 5))], "lab": Color(0.45, 0.22, 0.02), "fg": Color(0.4, 0.18, 0.0)},
+		{"id": "score", "label": "分數", "value": "%d" % int(sc.total), "lab": Color(0.4, 0.28, 0.0), "fg": Color(0.35, 0.22, 0.0)},
 	]
 	for it in items:
 		var id: String = str(it.id)
@@ -437,52 +427,40 @@ func _draw_hud() -> void:
 		if tex != null:
 			draw_texture_rect(tex, r, false)
 		else:
-			_round_rect(Rect2(r.position + Vector2(0, 10), r.size - Vector2(0, 10)), 14, Color(0.77, 0.58, 0.38))
-			draw_rect(Rect2(r.position + Vector2(0, 10), r.size - Vector2(0, 10)), Color(0.47, 0.31, 0.18), false, 2.0)
+			var fallback := {
+				"level": Color(1.0, 0.55, 0.67),
+				"time": Color(0.35, 0.78, 0.67),
+				"moves": Color(1.0, 0.67, 0.35),
+				"score": Color(1.0, 0.82, 0.28),
+			}
+			_round_rect(r, 14, fallback.get(id, Color(0.9, 0.9, 0.95)))
+			draw_rect(r, Color(1, 1, 1, 0.55), false, 2.0)
 		var lab: String = str(it.label)
 		var val: String = str(it.value)
 		var lab_col: Color = it.lab
 		var fg: Color = it.fg
-		# Text sits on wood plate (below hanging pins)
-		var fs_lab := int(clampf(r.size.y * 0.26, 11.0, 14.0))
-		var fs_val := int(clampf(r.size.y * 0.36, 15.0, 20.0))
+		var fs_lab := int(clampf(r.size.y * 0.30, 11.0, 14.0))
+		var fs_val := int(clampf(r.size.y * 0.48, 16.0, 22.0))
 		var lab_sz := font.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_lab)
 		var val_sz := font.get_string_size(val, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_val)
-		var text_top: float = r.position.y + r.size.y * 0.42
-		_draw_text(Vector2(r.position.x + (r.size.x - lab_sz.x) * 0.5, text_top), lab, fs_lab, lab_col, false)
-		_draw_text(Vector2(r.position.x + (r.size.x - val_sz.x) * 0.5, r.position.y + r.size.y * 0.78), val, fs_val, fg, false)
-		# Combo chip under score (mockup yellow sub-label)
-		if id == "score" and model.combo_bonus > 0:
-			var combo := "連擊 +%d" % model.combo_bonus
-			var fs_c := int(clampf(r.size.y * 0.22, 10.0, 12.0))
-			var csz := font.get_string_size(combo, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_c)
-			_draw_text(Vector2(r.position.x + (r.size.x - csz.x) * 0.5, r.position.y + r.size.y - 2.0), combo, fs_c, Color(0.95, 0.55, 0.1), true)
+		_draw_text(Vector2(r.position.x + (r.size.x - lab_sz.x) * 0.5, r.position.y + r.size.y * 0.36), lab, fs_lab, lab_col, true)
+		_draw_text(Vector2(r.position.x + (r.size.x - val_sz.x) * 0.5, r.position.y + r.size.y * 0.82), val, fs_val, fg, true)
+	if model.combo_bonus > 0:
+		_draw_text(Vector2(vp.x - 90, hud_h - 4), "連擊 +%d" % model.combo_bonus, 13, Color(0.95, 0.4, 0.15), true)
 
 
 func _draw_board() -> void:
 	var br := _board_rect()
-	# Soft drop shadow under wood frame
-	var frame_pad := _frame_pad()
-	var fr := Rect2(br.position - Vector2(frame_pad, frame_pad), br.size + Vector2(frame_pad * 2, frame_pad * 2))
-	draw_rect(Rect2(fr.position + Vector2(5, 8), fr.size), Color(0.35, 0.25, 0.15, 0.22), true, -1.0)
-	if tex_board_frame != null:
-		draw_texture_rect(tex_board_frame, fr, false)
-	else:
-		_round_rect(fr, 18, Color(0.72, 0.52, 0.32))
-		_round_rect(br.grow(4.0), 12, Color(0.92, 0.86, 0.76))
-		# corner screws fallback
-		for p in [fr.position + Vector2(12, 12), Vector2(fr.end.x - 12, fr.position.y + 12), Vector2(fr.position.x + 12, fr.end.y - 12), fr.end - Vector2(12, 12)]:
-			draw_circle(p, 5.0, Color(0.78, 0.80, 0.82))
-			draw_circle(p, 2.0, Color(0.45, 0.48, 0.5))
-	# Rounded beige cells (mockup soft inset tiles)
-	var rad := maxf(10.0, cell * 0.22)
+	draw_rect(Rect2(br.position + Vector2(6, 8), br.size), Color(0.4, 0.45, 0.55, 0.18), true, -1.0)
+	var frame_pad := maxf(10.0, cell * 0.12)
+	draw_rect(Rect2(br.position - Vector2(frame_pad, frame_pad), br.size + Vector2(frame_pad * 2, frame_pad * 2)), Color(0.98, 0.97, 0.94), true, -1.0)
+	draw_rect(Rect2(br.position - Vector2(frame_pad, frame_pad), br.size + Vector2(frame_pad * 2, frame_pad * 2)), Color(0.75, 0.7, 0.65), false, 3.0)
+	var rad := maxf(8.0, cell * 0.16)
 	for y in BoardModel.SIZE:
 		for x in BoardModel.SIZE:
-			var r := _cell_rect(x, y).grow(-1.5)
-			var c := Color(0.93, 0.87, 0.76) if (x + y) % 2 == 0 else Color(0.90, 0.83, 0.70)
+			var r := _cell_rect(x, y)
+			var c := Color(0.88, 0.90, 0.93) if (x + y) % 2 == 0 else Color(0.84, 0.87, 0.91)
 			_round_rect(r, rad, c)
-			# soft inner rim
-			draw_rect(r, Color(1, 1, 1, 0.18), false, 1.5)
 
 
 func _round_rect(r: Rect2, rad: float, col: Color) -> void:
@@ -495,105 +473,43 @@ func _round_rect(r: Rect2, rad: float, col: Color) -> void:
 	draw_circle(r.position + Vector2(r.size.x - rad, r.size.y - rad), rad, col)
 
 
-func _frame_pad() -> float:
-	var br := _board_rect()
-	return clampf(br.size.x * FRAME_INSET_RATIO, 16.0, 36.0)
-
-
 func _draw_gates() -> void:
-	# Glowing exit bars sit OUTSIDE the wood frame (mockup).
-	var fp: float = _frame_pad()
-	var br := _board_rect()
+	var door_w := maxf(14.0, cell * 0.22)
 	for g in model.gates:
 		var cname: String = str(g.color)
 		var col: Color = LevelData.COLORS.get(cname, Color.WHITE)
 		var start: int = int(g.start)
 		var size: int = int(g.size)
-		var side: String = str(g.side)
-		var end_i: int = start + size - 1
-		var pulse: float = 0.85 + 0.15 * abs(sin(Time.get_ticks_msec() * 0.004))
-		match side:
+		match str(g.side):
 			"right":
-				var top_r := _cell_rect(BoardModel.SIZE - 1, start)
-				var bot_r := _cell_rect(BoardModel.SIZE - 1, end_i)
-				var h: float = (bot_r.position.y + bot_r.size.y) - top_r.position.y
-				var bar_w: float = maxf(20.0, cell * 0.34)
-				var door := Rect2(br.position.x + br.size.x + fp + 2.0, top_r.position.y, bar_w, h)
-				_draw_gate_capsule(door, col, pulse, true)
-				# Arrow pointing outward (right)
-				var tip := Vector2(door.position.x + door.size.x + 10.0, door.get_center().y)
-				draw_colored_polygon(PackedVector2Array([tip, tip + Vector2(-14, -11), tip + Vector2(-14, 11)]), col)
+				for i in size:
+					var r := _cell_rect(BoardModel.SIZE - 1, start + i)
+					var door := Rect2(r.position.x + r.size.x + 3, r.position.y + cell * 0.1, door_w, r.size.y - cell * 0.2)
+					_round_rect(door, 6, col)
+					draw_rect(door, Color(1, 1, 1, 0.45), false, 2.0)
+					# glossy highlight on door
+					_round_rect(Rect2(door.position + Vector2(2, 3), Vector2(door.size.x * 0.35, door.size.y - 6)), 4, Color(1, 1, 1, 0.35))
 			"left":
-				var top_l := _cell_rect(0, start)
-				var bot_l := _cell_rect(0, end_i)
-				var h2: float = (bot_l.position.y + bot_l.size.y) - top_l.position.y
-				var bar_w2: float = maxf(20.0, cell * 0.34)
-				var door2 := Rect2(br.position.x - fp - bar_w2 - 2.0, top_l.position.y, bar_w2, h2)
-				_draw_gate_capsule(door2, col, pulse, true)
-				# Arrow pointing inward toward board (rightward)
-				var tip2 := Vector2(door2.position.x + door2.size.x + 12.0, door2.get_center().y)
-				draw_colored_polygon(PackedVector2Array([tip2, tip2 + Vector2(-14, -11), tip2 + Vector2(-14, 11)]), col)
+				for i in size:
+					var r2 := _cell_rect(0, start + i)
+					var door2 := Rect2(r2.position.x - door_w - 3, r2.position.y + cell * 0.1, door_w, r2.size.y - cell * 0.2)
+					_round_rect(door2, 6, col)
+					draw_rect(door2, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door2.position + Vector2(door2.size.x * 0.55, 3), Vector2(door2.size.x * 0.35, door2.size.y - 6)), 4, Color(1, 1, 1, 0.35))
 			"bottom":
-				var left_b := _cell_rect(start, BoardModel.SIZE - 1)
-				var right_b := _cell_rect(end_i, BoardModel.SIZE - 1)
-				var w3: float = (right_b.position.x + right_b.size.x) - left_b.position.x
-				var bar_h3: float = maxf(20.0, cell * 0.34)
-				var door3 := Rect2(left_b.position.x, br.position.y + br.size.y + fp + 2.0, w3, bar_h3)
-				_draw_gate_capsule(door3, col, pulse, false)
-				var tip3 := Vector2(door3.get_center().x, door3.position.y + door3.size.y + 10.0)
-				draw_colored_polygon(PackedVector2Array([tip3, tip3 + Vector2(-11, -14), tip3 + Vector2(11, -14)]), col)
+				for i in size:
+					var r3 := _cell_rect(start + i, BoardModel.SIZE - 1)
+					var door3 := Rect2(r3.position.x + cell * 0.1, r3.position.y + r3.size.y + 3, r3.size.x - cell * 0.2, door_w)
+					_round_rect(door3, 6, col)
+					draw_rect(door3, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door3.position + Vector2(3, 2), Vector2(door3.size.x - 6, door3.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
 			"top":
-				var left_t := _cell_rect(start, 0)
-				var right_t := _cell_rect(end_i, 0)
-				var w4: float = (right_t.position.x + right_t.size.x) - left_t.position.x
-				var bar_h4: float = maxf(20.0, cell * 0.34)
-				var door4 := Rect2(left_t.position.x, br.position.y - fp - bar_h4 - 2.0, w4, bar_h4)
-				_draw_gate_capsule(door4, col, pulse, false)
-				var tip4 := Vector2(door4.get_center().x, door4.position.y + door4.size.y + 12.0)
-				draw_colored_polygon(PackedVector2Array([tip4, tip4 + Vector2(-11, -14), tip4 + Vector2(11, -14)]), col)
-
-
-func _draw_gate_capsule(door: Rect2, col: Color, pulse: float, vertical: bool) -> void:
-	var glow := col
-	glow.a = 0.35 * pulse
-	_round_rect(door.grow(5.0), 12, glow)
-	var face := col
-	face.a = 0.95
-	_round_rect(door, 10, face)
-	draw_rect(door, Color(1, 1, 1, 0.55), false, 2.0)
-	if vertical:
-		_round_rect(Rect2(door.position + Vector2(3, 6), Vector2(door.size.x * 0.35, door.size.y - 12)), 6, Color(1, 1, 1, 0.35))
-	else:
-		_round_rect(Rect2(door.position + Vector2(6, 3), Vector2(door.size.x - 12, door.size.y * 0.4)), 6, Color(1, 1, 1, 0.35))
-
-
-func _draw_gate_arrow_tex(tex: Texture2D, center: Vector2, span: float, col: Color, side: String) -> void:
-	var s: float = clampf(span * 0.85, 40.0, 90.0)
-	if tex != null:
-		draw_texture_rect(tex, Rect2(center - Vector2(s, s) * 0.5, Vector2(s, s)), false)
-		return
-	# Procedural arrow fallback
-	var tip: Vector2
-	var a: Vector2
-	var b: Vector2
-	match side:
-		"right":
-			tip = center + Vector2(18, 0)
-			a = center + Vector2(2, -12)
-			b = center + Vector2(2, 12)
-		"left":
-			tip = center + Vector2(16, 0)
-			a = center + Vector2(0, -12)
-			b = center + Vector2(0, 12)
-		"bottom":
-			tip = center + Vector2(0, 18)
-			a = center + Vector2(-12, 2)
-			b = center + Vector2(12, 2)
-		_:
-			tip = center + Vector2(0, 16)
-			a = center + Vector2(-12, 0)
-			b = center + Vector2(12, 0)
-	draw_colored_polygon(PackedVector2Array([tip, a, b]), col)
+				for i in size:
+					var r4 := _cell_rect(start + i, 0)
+					var door4 := Rect2(r4.position.x + cell * 0.1, r4.position.y - door_w - 3, r4.size.x - cell * 0.2, door_w)
+					_round_rect(door4, 6, col)
+					draw_rect(door4, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door4.position + Vector2(3, door4.size.y * 0.45), Vector2(door4.size.x - 6, door4.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
 
 
 func _block_bounds(blk: Dictionary) -> Rect2:
@@ -632,44 +548,25 @@ func _draw_one_block(b: Dictionary, alpha: float) -> void:
 	var frozen: bool = bool(b.get("frozen", false))
 	var base: Color = col if not stone else LevelData.COLORS["stone"]
 	base.a = alpha
-	var rad := maxf(10.0, cell * 0.22)
+	var rad := maxf(8.0, cell * 0.16)
 	for c in b.cells:
 		var r: Rect2 = _cell_rect(c.x, c.y).grow(-1)
-		_round_rect(Rect2(r.position + Vector2(3, 4), r.size), rad, Color(0, 0, 0, 0.12 * alpha))
+		_round_rect(Rect2(r.position + Vector2(3, 4), r.size), rad, Color(0, 0, 0, 0.10 * alpha))
 		_round_rect(r, rad, base)
-		if stone:
-			# soft pebble highlight
-			_round_rect(Rect2(r.position + Vector2(6, 5), Vector2(r.size.x * 0.45, r.size.y * 0.28)), 8, Color(1, 1, 1, 0.18 * alpha))
 	var bounds: Rect2 = _block_bounds(b).grow(1)
-	draw_rect(bounds, Color(1, 1, 1, 0.28 * alpha), false, 2.0)
-	if not stone:
-		_round_rect(Rect2(bounds.position + Vector2(10, 8), Vector2(bounds.size.x - 20, mini(22.0, bounds.size.y * 0.22))), 10, Color(1, 1, 1, 0.28 * alpha))
+	draw_rect(bounds, Color(1, 1, 1, 0.22 * alpha), false, 2.0)
+	_round_rect(Rect2(bounds.position + Vector2(10, 8), Vector2(bounds.size.x - 20, mini(22.0, bounds.size.y * 0.22))), 10, Color(1, 1, 1, 0.25 * alpha))
 	if frozen:
 		_round_rect(bounds, 12, Color(0.7, 0.9, 1.0, 0.4 * alpha))
 		_draw_text(bounds.get_center() + Vector2(-14, 10), "❄", int(maxi(22, int(cell * 0.35))), Color(1, 1, 1, 0.95 * alpha))
-	elif stone:
-		_draw_face(bounds.get_center() + Vector2(0, -bounds.size.y * 0.06), mini(bounds.size.x, bounds.size.y) * 0.16, alpha)
-		_draw_stone_grass(bounds, alpha)
-	else:
+	elif not stone:
 		_draw_face(bounds.get_center(), mini(bounds.size.x, bounds.size.y) * 0.18, alpha)
 	var axis: String = str(b.get("axis", ""))
-	if axis != "" and not stone:
+	if axis != "":
 		var icon := "↔" if axis == "h" else "↕"
 		_draw_text(bounds.position + Vector2(8, 24), icon, 20, Color(1, 1, 1, 0.95 * alpha))
 	if int(b.id) == selected_id:
-		draw_rect(bounds.grow(5), Color(1, 1, 1, 0.95), false, 3.5)
-
-
-func _draw_stone_grass(bounds: Rect2, alpha: float) -> void:
-	# Small green grass tufts at stone base (mockup)
-	var base_y: float = bounds.position.y + bounds.size.y - 4.0
-	var cx: float = bounds.get_center().x
-	var gcol := Color(0.35, 0.72, 0.32, 0.95 * alpha)
-	for ox in [-10.0, -3.0, 5.0, 12.0]:
-		var tip := Vector2(cx + ox, base_y - 10.0 - abs(ox) * 0.15)
-		var left := Vector2(cx + ox - 3.5, base_y + 1.0)
-		var right := Vector2(cx + ox + 3.5, base_y + 1.0)
-		draw_colored_polygon(PackedVector2Array([tip, left, right]), gcol)
+		draw_rect(bounds.grow(5), Color(1, 1, 1, 0.9), false, 3.0)
 
 
 func _draw_face(center: Vector2, s: float, alpha: float) -> void:
@@ -695,7 +592,12 @@ func _draw_exit_anims() -> void:
 
 
 func _draw_controls() -> void:
-	# No hard tray — glossy round buttons float on sky (mockup).
+	# Soft pill tray behind large bottom buttons (bg still shows through edges).
+	var tray_top: float = vp.y - toolbar_h
+	if tex_toolbar != null:
+		draw_texture_rect(tex_toolbar, Rect2(0, tray_top, vp.x, toolbar_h), false)
+	else:
+		_round_rect(Rect2(12, tray_top + 8, vp.x - 24, toolbar_h - 16), 28, Color(1, 0.98, 0.96, 0.72))
 	for id in btn_rects.keys():
 		_draw_icon_button(str(id), btn_rects[id])
 
@@ -707,33 +609,18 @@ func _draw_icon_button(id: String, r: Rect2) -> void:
 		tex = tex_btn_pressed[id]
 	elif tex_btn.has(id):
 		tex = tex_btn[id]
-	# Icon circle occupies top of hit rect; Chinese label underneath
-	var icon_r := Rect2(r.position, Vector2(r.size.x, r.size.x))
-	if use_pressed:
-		icon_r.position.y += 2.0
 	if tex != null:
-		draw_texture_rect(tex, icon_r, false)
+		# Keep ≥48px touch area; draw icon filling the rect
+		draw_texture_rect(tex, r, false)
 	else:
 		var cols := {
-			"undo": Color(0.40, 0.65, 0.95),
-			"reset": Color(0.92, 0.35, 0.38),
-			"hint": Color(1.0, 0.68, 0.22),
-			"map": Color(0.35, 0.78, 0.47),
-			"rules": Color(0.67, 0.51, 0.92),
+			"undo": Color(0.55, 0.7, 0.95),
+			"reset": Color(0.95, 0.7, 0.55),
+			"hint": Color(0.95, 0.85, 0.4),
+			"map": Color(0.7, 0.85, 0.6),
+			"rules": Color(0.8, 0.75, 0.9),
 		}
-		_draw_button(icon_r, id, cols.get(id, Color(0.8, 0.8, 0.85)), true)
-	var zh := {
-		"undo": "撤銷",
-		"reset": "重置",
-		"hint": "提示",
-		"map": "網格",
-		"rules": "幫助",
-	}
-	var lab: String = str(zh.get(id, id))
-	var fs := int(clampf(r.size.x * 0.22, 11.0, 14.0))
-	var lsz := font.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
-	var ly: float = r.position.y + r.size.x + fs * 0.85
-	_draw_text(Vector2(r.position.x + (r.size.x - lsz.x) * 0.5, ly), lab, fs, Color(0.28, 0.22, 0.18), false)
+		_draw_button(r, id, cols.get(id, Color(0.8, 0.8, 0.85)), true)
 
 
 func _side_panel_rect() -> Rect2:
