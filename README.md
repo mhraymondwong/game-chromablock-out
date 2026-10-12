@@ -67,3 +67,18 @@ iOS 需在 macOS + Xcode 上同樣用 Export 預設匯出。
 ## 授權
 
 程式與原創美術由專案作者製作。字型使用 Noto Sans CJK（SIL Open Font License）。
+
+
+## PWA / 網頁版 (HTML5)
+
+Export preset: **Web** (`export_presets.cfg`) — Godot 4.7.2, `gl_compatibility`, no threads (better Safari).
+
+```bash
+# Requires export templates in ~/.local/share/godot/export_templates/4.7.2.stable/
+/home/box/bin/godot --headless --path . --export-release "Web" "build/pwa/index.html"
+```
+
+- Output folder: `build/pwa/`
+- Zip for hosting: `build/color-block-escape-pwa.zip`
+- Local play: serve `build/pwa/` over HTTP (e.g. `python3 -m http.server 8088`) and open `http://localhost:8088/`
+- **Add to Home Screen** needs HTTPS (or localhost). Plain HTTP on a LAN IP usually allows play but not install on phones.

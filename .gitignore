@@ -1,9 +1,12 @@
 .godot/
 *.translation
 .import/
-export_presets.cfg
 *.pck
-*.zip
 .DS_Store
 user://
 *.tmp
+# Local PWA/web binaries (zip separately for hosting)
+build/pwa/*.wasm
+build/pwa/*.pck
+build/*.zip
+*.zip
