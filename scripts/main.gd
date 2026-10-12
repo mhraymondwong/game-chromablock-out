@@ -155,12 +155,16 @@ func _recompute_layout() -> void:
 	is_narrow = true
 	var margin := 14.0
 	var top_pad := 2.0
+	# Home-indicator / Safari chrome safe inset (logical px).
+	var bottom_safe: float = maxf(12.0, vp.y * 0.02) + 30.0
 
-	# Raymond bubble logo — full title visible, aspect preserved
+	# Raymond bubble logo — shrink on short viewports so PLAY stays on-screen
 	var banner: Texture2D = tex_logo if tex_logo != null else (tex_title if tex_title != null else tex_title_sm)
 	var max_w: float = vp.x - 4.0
-	# Tall enough for full Raymond logo at nearly full width
-	var max_h: float = clampf(vp.y * 0.34, 240.0, 310.0)
+	# Soft caps: tall phones ~0.32; short browser chrome viewports down to ~0.22
+	var max_h: float = clampf(vp.y * 0.30, 110.0, 300.0)
+	if vp.y < 700.0:
+		max_h = minf(max_h, vp.y * 0.24)
 	var bw: float = max_w
 	var bh: float = 200.0
 	if banner != null:
@@ -171,10 +175,11 @@ func _recompute_layout() -> void:
 			bh = max_h
 			bw = bh * aspect
 	title_rect = Rect2((vp.x - bw) * 0.5, top_pad, bw, bh)
-	# PLAY hit zone on start screen (matches orange button + hand pad)
+	# PLAY hit zone: above bottom safe area (not a fixed 0.84 that can miss short phones)
 	var pw: float = vp.x * 0.62
-	var ph: float = clampf(vp.y * 0.10, 72.0, 100.0)
-	play_hit_rect = Rect2((vp.x - pw) * 0.5, vp.y * 0.84, pw, ph)
+	var ph: float = clampf(vp.y * 0.09, 64.0, 96.0)
+	var play_y: float = vp.y - bottom_safe - ph
+	play_hit_rect = Rect2((vp.x - pw) * 0.5, play_y, pw, ph)
 
 	# Colorful badge chips under title
 	var badge_h: float = clampf(vp.x * 0.145, 50.0, 60.0)
@@ -202,7 +207,8 @@ func _recompute_layout() -> void:
 	icon = clampf(icon, 72.0, 88.0)
 	# Recompute gap so buttons are evenly spaced across width
 	gap_btn = maxf(4.0, (vp.x - side_m * 2.0 - icon * float(n)) / float(maxi(n - 1, 1)))
-	toolbar_h = icon + BOTTOM_PAD + 24.0
+	var lift_tb: float = maxf(BOTTOM_PAD, maxf(12.0, vp.y * 0.02) + 24.0)
+	toolbar_h = icon + lift_tb + 16.0
 
 	var avail_w: float = vp.x - margin * 2.0 - GATE_PAD * 2.0
 	var avail_h: float = vp.y - hud_h - toolbar_h - margin * 2.0 - GATE_PAD * 2.0
@@ -224,8 +230,9 @@ func _layout_bottom_toolbar(icon: float = BTN_SIZE, gap_btn: float = 8.0) -> voi
 	var n := labels.size()
 	var total_w: float = n * icon + gap_btn * float(n - 1)
 	var x: float = (vp.x - total_w) * 0.5
-	# Lift buttons: bottom of icon sits BOTTOM_PAD above screen bottom
-	var y: float = vp.y - BOTTOM_PAD - icon
+	# Lift above home indicator / browser chrome
+	var lift: float = maxf(BOTTOM_PAD, maxf(12.0, vp.y * 0.02) + 24.0)
+	var y: float = vp.y - lift - icon
 	for id in labels:
 		btn_rects[id] = Rect2(x, y, icon, icon)
 		x += icon + gap_btn
@@ -340,7 +347,7 @@ func _draw() -> void:
 
 
 func _draw_start_screen() -> void:
-	# Full-bleed cover of Raymond's start-page art (no stretch distortion).
+	# Full-bleed cover; bias crop toward bottom so baked-in PLAY stays visible on short phones.
 	if tex_start != null:
 		var tw := float(tex_start.get_width())
 		var th := float(tex_start.get_height())
@@ -348,13 +355,15 @@ func _draw_start_screen() -> void:
 		var dw := tw * scale
 		var dh := th * scale
 		var ox := (vp.x - dw) * 0.5
-		var oy := (vp.y - dh) * 0.5
+		var oy_center := (vp.y - dh) * 0.5
+		var oy_bottom := vp.y - dh
+		# Prefer lower portion (PLAY + hand) when we must crop vertically.
+		var oy := lerpf(oy_center, oy_bottom, 0.7) if dh > vp.y else oy_center
 		draw_texture_rect(tex_start, Rect2(ox, oy, dw, dh), false)
 	else:
 		_draw_background()
 		_draw_text(Vector2(vp.x * 0.22, vp.y * 0.4), "彩色方塊逃脫", 28, Color(1.0, 0.42, 0.28), true)
-	# Invisible generous hit zone over PLAY + hand (kids-friendly).
-	# Optional soft pulse ring so the tap target is obvious without covering art.
+	# Soft pulse over PLAY hit zone (kids-friendly).
 	var r := play_hit_rect
 	if r.size.x > 1.0:
 		var pulse: float = 0.12 + 0.08 * abs(sin(Time.get_ticks_msec() * 0.004))
@@ -362,10 +371,17 @@ func _draw_start_screen() -> void:
 
 
 func _draw_background() -> void:
-	# Full-bleed playroom background (portrait art preferred).
+	# Cover full vp (scale-to-cover, center crop) — no letterbox on tall/short phones.
 	var bg: Texture2D = tex_bg_portrait if tex_bg_portrait != null else tex_bg
 	if bg != null:
-		draw_texture_rect(bg, Rect2(Vector2.ZERO, vp), false)
+		var tw := float(bg.get_width())
+		var th := float(bg.get_height())
+		var scale: float = maxf(vp.x / tw, vp.y / th)
+		var dw := tw * scale
+		var dh := th * scale
+		var ox := (vp.x - dw) * 0.5
+		var oy := (vp.y - dh) * 0.5
+		draw_texture_rect(bg, Rect2(ox, oy, dw, dh), false)
 	else:
 		draw_rect(Rect2(Vector2.ZERO, vp), bg_a)
 		draw_circle(Vector2(vp.x * 0.14, vp.y * 0.16), minf(vp.x, vp.y) * 0.18, Color(1, 0.85, 0.9, 0.35))

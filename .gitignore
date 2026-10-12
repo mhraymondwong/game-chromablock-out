@@ -10,3 +10,6 @@ user://
 !build/pwa/*.wasm
 build/*.zip
 *.zip
+
+# Godot may write .import next to exported icons; never publish those
+build/pwa/*.import
