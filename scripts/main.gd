@@ -49,11 +49,59 @@ var toolbar_h: float = 0.0
 var btn_rects: Dictionary = {}  # id -> Rect2
 var help_lines_pos: Vector2 = Vector2.ZERO
 
+# --- Kids UI art (procedural, assets/ui/) ---
+var tex_bg: Texture2D
+var tex_bg_portrait: Texture2D
+var tex_title: Texture2D
+var tex_title_sm: Texture2D
+var tex_hud: Texture2D
+var tex_toolbar: Texture2D
+var tex_panel: Texture2D
+var tex_star_on: Texture2D
+var tex_star_off: Texture2D
+var tex_btn: Dictionary = {}  # id -> Texture2D
+var tex_btn_pressed: Dictionary = {}
+var tex_gates: Dictionary = {}  # color name -> Texture2D
+var pressed_btn: String = ""
+var press_flash_t: float = 0.0
+
+
+func _load_ui_art() -> void:
+	tex_bg = _tex("res://assets/ui/bg_playroom.png")
+	tex_bg_portrait = _tex("res://assets/ui/bg_playroom_portrait.png")
+	tex_title = _tex("res://assets/ui/title_banner.png")
+	tex_title_sm = _tex("res://assets/ui/title_banner_sm.png")
+	tex_hud = _tex("res://assets/ui/hud_bar.png")
+	tex_toolbar = _tex("res://assets/ui/toolbar_bar.png")
+	tex_panel = _tex("res://assets/ui/panel_frame.png")
+	tex_star_on = _tex("res://assets/ui/star_on.png")
+	tex_star_off = _tex("res://assets/ui/star_off.png")
+	for id in ["undo", "reset", "hint", "map", "rules"]:
+		tex_btn[id] = _tex("res://assets/ui/btn_%s.png" % id)
+		tex_btn_pressed[id] = _tex("res://assets/ui/btn_%s_pressed.png" % id)
+	for c in ["red", "blue", "green", "yellow", "purple", "orange"]:
+		tex_gates[c] = _tex("res://assets/ui/gate_%s.png" % c)
+
+
+func _tex(path: String) -> Texture2D:
+	# Prefer Image.load so art works before Godot writes .import files.
+	var img := Image.new()
+	var abs_path := ProjectSettings.globalize_path(path)
+	if img.load(abs_path) == OK:
+		var it := ImageTexture.create_from_image(img)
+		return it
+	var t: Texture2D = load(path) as Texture2D
+	if t != null:
+		return t
+	push_warning("Missing UI tex: " + path + " @ " + abs_path)
+	return null
+
 
 func _ready() -> void:
 	font = load("res://assets/fonts/NotoSansCJK-Regular.ttc")
 	if font == null:
 		font = ThemeDB.fallback_font
+	_load_ui_art()
 	model = BoardModel.new()
 	_load_progress()
 	get_viewport().size_changed.connect(_on_viewport_resized)
@@ -73,7 +121,7 @@ func _on_viewport_resized() -> void:
 
 func _recompute_layout() -> void:
 	is_narrow = vp.y > vp.x * 1.05 or vp.x < 900.0
-	hud_h = 96.0 if is_narrow else 64.0
+	hud_h = 110.0 if is_narrow else 72.0
 	toolbar_h = 0.0
 	var margin := 12.0 if is_narrow else 20.0
 
@@ -112,16 +160,17 @@ func _layout_bottom_toolbar() -> void:
 	btn_rects.clear()
 	var labels := ["undo", "reset", "hint", "map", "rules"]
 	var n := labels.size()
-	var pad := 8.0
-	var bar_y: float = vp.y - toolbar_h + 8.0
-	var bar_h: float = toolbar_h - 16.0
-	var total_pad: float = pad * (n + 1)
-	var bw: float = (vp.x - total_pad) / float(n)
-	bw = maxf(bw, MIN_TOUCH)
-	var x := pad
+	var pad := 10.0
+	var bar_y: float = vp.y - toolbar_h + 6.0
+	var bar_h: float = toolbar_h - 12.0
+	var icon: float = minf(bar_h, maxf(MIN_TOUCH, 56.0))
+	icon = minf(icon, (vp.x - pad * (n + 1)) / float(n))
+	var total_w: float = n * icon + pad * (n + 1)
+	var x: float = (vp.x - total_w) * 0.5 + pad
+	var y: float = bar_y + (bar_h - icon) * 0.5
 	for id in labels:
-		btn_rects[id] = Rect2(x, bar_y, bw, maxf(bar_h, MIN_TOUCH))
-		x += bw + pad
+		btn_rects[id] = Rect2(x, y, icon, icon)
+		x += icon + pad
 	help_lines_pos = Vector2(-1, -1)  # hidden on narrow
 
 
@@ -129,14 +178,23 @@ func _layout_side_panel(panel_w: float, margin: float) -> void:
 	btn_rects.clear()
 	var px: float = vp.x - panel_w - margin
 	var py: float = hud_h + margin + 8.0
-	var bw: float = panel_w - 40.0
-	var bh: float = maxf(MIN_TOUCH, 48.0)
-	var gap_y: float = 14.0
-	var start_y: float = py + 160.0
+	# Title banner on top; icon buttons in two columns (round glossy)
+	var icon: float = clampf(panel_w * 0.34, MIN_TOUCH, 68.0)
+	var gap_x: float = 12.0
+	var gap_y: float = 28.0  # room for zh caption under icon
+	var start_y: float = py + 130.0
 	var ids := ["undo", "reset", "hint", "map", "rules"]
+	var row_w: float = icon * 2.0 + gap_x
+	var left0: float = px + (panel_w - row_w) * 0.5
 	for i in ids.size():
-		btn_rects[ids[i]] = Rect2(px + 20.0, start_y + i * (bh + gap_y), bw, bh)
-	help_lines_pos = Vector2(px + 20.0, py + 20.0)
+		var col_i := i % 2
+		var row_i := i / 2
+		# Last (rules) centered if odd count on its row
+		var x: float = left0 + col_i * (icon + gap_x)
+		if i == ids.size() - 1 and ids.size() % 2 == 1:
+			x = px + (panel_w - icon) * 0.5
+		btn_rects[ids[i]] = Rect2(x, start_y + row_i * (icon + gap_y), icon, icon)
+	help_lines_pos = Vector2(px + 12.0, py + 4.0)
 
 
 func _load_progress() -> void:
@@ -185,6 +243,10 @@ func _process(delta: float) -> void:
 			hint_flash = {}
 	if toast_t > 0.0:
 		toast_t -= delta
+	if press_flash_t > 0.0:
+		press_flash_t -= delta
+		if press_flash_t <= 0.0:
+			pressed_btn = ""
 	var done: Array = []
 	for k in exit_anim.keys():
 		exit_anim[k].t += delta
@@ -217,11 +279,7 @@ func _cell_at(pos: Vector2) -> Vector2i:
 
 
 func _draw() -> void:
-	draw_rect(Rect2(Vector2.ZERO, vp), bg_a)
-	draw_circle(Vector2(vp.x * 0.14, vp.y * 0.16), minf(vp.x, vp.y) * 0.18, Color(1, 0.85, 0.9, 0.35))
-	draw_circle(Vector2(vp.x * 0.86, vp.y * 0.84), minf(vp.x, vp.y) * 0.22, Color(0.75, 0.9, 1.0, 0.4))
-	draw_circle(Vector2(vp.x * 0.78, vp.y * 0.12), minf(vp.x, vp.y) * 0.12, Color(0.9, 1.0, 0.8, 0.3))
-
+	_draw_background()
 	_draw_hud()
 	_draw_board()
 	_draw_gates()
@@ -242,6 +300,16 @@ func _draw() -> void:
 		_draw_toast()
 
 
+func _draw_background() -> void:
+	var bg: Texture2D = tex_bg_portrait if is_narrow and tex_bg_portrait != null else tex_bg
+	if bg != null:
+		draw_texture_rect(bg, Rect2(Vector2.ZERO, vp), false)
+	else:
+		draw_rect(Rect2(Vector2.ZERO, vp), bg_a)
+		draw_circle(Vector2(vp.x * 0.14, vp.y * 0.16), minf(vp.x, vp.y) * 0.18, Color(1, 0.85, 0.9, 0.35))
+		draw_circle(Vector2(vp.x * 0.86, vp.y * 0.84), minf(vp.x, vp.y) * 0.22, Color(0.75, 0.9, 1.0, 0.4))
+
+
 func _draw_text(pos: Vector2, text: String, size: int, col: Color, outline: bool = false) -> void:
 	if outline:
 		draw_string(font, pos + Vector2(1, 1), text, HORIZONTAL_ALIGNMENT_LEFT, -1, size, Color(0, 0, 0, 0.25))
@@ -249,8 +317,11 @@ func _draw_text(pos: Vector2, text: String, size: int, col: Color, outline: bool
 
 
 func _draw_hud() -> void:
-	draw_rect(Rect2(0, 0, vp.x, hud_h), Color(1, 1, 1, 0.78))
-	draw_rect(Rect2(0, hud_h - 2, vp.x, 2), Color(0.7, 0.75, 0.85, 0.5))
+	if tex_hud != null:
+		draw_texture_rect(tex_hud, Rect2(0, 0, vp.x, hud_h), false)
+	else:
+		draw_rect(Rect2(0, 0, vp.x, hud_h), Color(1, 1, 1, 0.78))
+		draw_rect(Rect2(0, hud_h - 2, vp.x, 2), Color(0.7, 0.75, 0.85, 0.5))
 	var gold: float = float(level_data.get("gold", 60))
 	var sc: Dictionary = BoardModel.compute_score(model.moves, int(level_data.get("par", 5)), elapsed, gold, model.combo_bonus)
 	var mm := int(elapsed) / 60
@@ -259,17 +330,32 @@ func _draw_hud() -> void:
 	var lv := "關卡 %d/%d  %s" % [level_index + 1, LevelData.level_count(), str(level_data.get("title", ""))]
 
 	if is_narrow:
-		_draw_text(Vector2(14, 28), "彩色方塊逃脫", 20, Color(0.25, 0.3, 0.45), true)
-		_draw_text(Vector2(14, 52), lv, 14, Color(0.35, 0.4, 0.55))
-		_draw_text(Vector2(14, 74), "⏱ %02d:%02d   步 %d/%d   分 %d" % [
+		var banner: Texture2D = tex_title_sm if tex_title_sm != null else tex_title
+		var banner_bottom := 36.0
+		if banner != null:
+			var bw: float = minf(vp.x - 24.0, 340.0)
+			var bh: float = bw * float(banner.get_height()) / float(banner.get_width())
+			bh = minf(bh, 70.0)
+			draw_texture_rect(banner, Rect2((vp.x - bw) * 0.5, 0.0, bw, bh), false)
+			banner_bottom = bh - 4.0
+		else:
+			_draw_text(Vector2(14, 28), "彩色方塊逃脫", 20, Color(0.25, 0.3, 0.45), true)
+		_draw_text(Vector2(12, banner_bottom + 18.0), lv, 13, Color(0.35, 0.4, 0.55))
+		_draw_text(Vector2(12, banner_bottom + 36.0), "⏱ %02d:%02d   步 %d/%d   分 %d" % [
 			mm, ss, model.moves, int(level_data.get("par", 5)), int(sc.total)
-		], 14, tcol)
+		], 13, tcol)
 		if model.combo_bonus > 0:
-			_draw_text(Vector2(vp.x - 100, 74), "連擊 +%d" % model.combo_bonus, 13, Color(0.9, 0.45, 0.2))
+			_draw_text(Vector2(vp.x - 100, banner_bottom + 36.0), "連擊 +%d" % model.combo_bonus, 12, Color(0.9, 0.45, 0.2))
 	else:
-		_draw_text(Vector2(24, 42), "彩色方塊逃脫", 28, Color(0.25, 0.3, 0.45), true)
-		_draw_text(Vector2(250, 40), "Color Block Escape", 16, Color(0.45, 0.5, 0.6))
-		_draw_text(Vector2(minf(480, vp.x * 0.38), 40), lv, 20, Color(0.3, 0.35, 0.5))
+		var banner2: Texture2D = tex_title
+		if banner2 != null:
+			var bw2: float = minf(340.0, vp.x * 0.32)
+			var bh2: float = bw2 * float(banner2.get_height()) / float(banner2.get_width())
+			bh2 = minf(bh2, hud_h - 4.0)
+			draw_texture_rect(banner2, Rect2(8.0, (hud_h - bh2) * 0.5, bw2, bh2), false)
+		else:
+			_draw_text(Vector2(24, 42), "彩色方塊逃脫", 28, Color(0.25, 0.3, 0.45), true)
+		_draw_text(Vector2(minf(360, vp.x * 0.30), 40), lv, 18, Color(0.3, 0.35, 0.5))
 		var rx: float = vp.x - 360
 		_draw_text(Vector2(rx, 28), "時間 %02d:%02d" % [mm, ss], 18, tcol)
 		_draw_text(Vector2(rx, 50), "分數 %d" % int(sc.total), 18, Color(0.35, 0.35, 0.55))
@@ -305,7 +391,8 @@ func _round_rect(r: Rect2, rad: float, col: Color) -> void:
 func _draw_gates() -> void:
 	var door_w := maxf(14.0, cell * 0.22)
 	for g in model.gates:
-		var col: Color = LevelData.COLORS.get(str(g.color), Color.WHITE)
+		var cname: String = str(g.color)
+		var col: Color = LevelData.COLORS.get(cname, Color.WHITE)
 		var start: int = int(g.start)
 		var size: int = int(g.size)
 		match str(g.side):
@@ -314,25 +401,30 @@ func _draw_gates() -> void:
 					var r := _cell_rect(BoardModel.SIZE - 1, start + i)
 					var door := Rect2(r.position.x + r.size.x + 3, r.position.y + cell * 0.1, door_w, r.size.y - cell * 0.2)
 					_round_rect(door, 6, col)
-					draw_rect(door, Color(1, 1, 1, 0.35), false, 2.0)
+					draw_rect(door, Color(1, 1, 1, 0.45), false, 2.0)
+					# glossy highlight on door
+					_round_rect(Rect2(door.position + Vector2(2, 3), Vector2(door.size.x * 0.35, door.size.y - 6)), 4, Color(1, 1, 1, 0.35))
 			"left":
 				for i in size:
 					var r2 := _cell_rect(0, start + i)
 					var door2 := Rect2(r2.position.x - door_w - 3, r2.position.y + cell * 0.1, door_w, r2.size.y - cell * 0.2)
 					_round_rect(door2, 6, col)
-					draw_rect(door2, Color(1, 1, 1, 0.35), false, 2.0)
+					draw_rect(door2, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door2.position + Vector2(door2.size.x * 0.55, 3), Vector2(door2.size.x * 0.35, door2.size.y - 6)), 4, Color(1, 1, 1, 0.35))
 			"bottom":
 				for i in size:
 					var r3 := _cell_rect(start + i, BoardModel.SIZE - 1)
 					var door3 := Rect2(r3.position.x + cell * 0.1, r3.position.y + r3.size.y + 3, r3.size.x - cell * 0.2, door_w)
 					_round_rect(door3, 6, col)
-					draw_rect(door3, Color(1, 1, 1, 0.35), false, 2.0)
+					draw_rect(door3, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door3.position + Vector2(3, 2), Vector2(door3.size.x - 6, door3.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
 			"top":
 				for i in size:
 					var r4 := _cell_rect(start + i, 0)
 					var door4 := Rect2(r4.position.x + cell * 0.1, r4.position.y - door_w - 3, r4.size.x - cell * 0.2, door_w)
 					_round_rect(door4, 6, col)
-					draw_rect(door4, Color(1, 1, 1, 0.35), false, 2.0)
+					draw_rect(door4, Color(1, 1, 1, 0.45), false, 2.0)
+					_round_rect(Rect2(door4.position + Vector2(3, door4.size.y * 0.45), Vector2(door4.size.x - 6, door4.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
 
 
 func _block_bounds(blk: Dictionary) -> Rect2:
@@ -416,16 +508,59 @@ func _draw_exit_anims() -> void:
 
 func _draw_controls() -> void:
 	if is_narrow:
-		# Bottom toolbar background
-		draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, toolbar_h), Color(1, 1, 1, 0.88))
-		draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, 2), Color(0.7, 0.75, 0.85, 0.45))
-		var short := {
-			"undo": "↺",
-			"reset": "⟳",
-			"hint": "💡",
-			"map": "🗺",
-			"rules": "❓",
+		if tex_toolbar != null:
+			draw_texture_rect(tex_toolbar, Rect2(0, vp.y - toolbar_h, vp.x, toolbar_h), false)
+		else:
+			draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, toolbar_h), Color(1, 1, 1, 0.88))
+			draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, 2), Color(0.7, 0.75, 0.85, 0.45))
+		for id in btn_rects.keys():
+			_draw_icon_button(str(id), btn_rects[id])
+	else:
+		var panel := _side_panel_rect()
+		if tex_panel != null:
+			draw_texture_rect(tex_panel, panel, false)
+		else:
+			_round_rect(panel, 18, Color(1, 1, 1, 0.78))
+		if help_lines_pos.x >= 0:
+			var p := help_lines_pos
+			# Mini title banner inside panel
+			var tb: Texture2D = tex_title_sm if tex_title_sm != null else tex_title
+			if tb != null:
+				var tw: float = minf(panel.size.x - 24.0, 260.0)
+				var th: float = tw * float(tb.get_height()) / float(tb.get_width())
+				draw_texture_rect(tb, Rect2(panel.position.x + (panel.size.x - tw) * 0.5, p.y, tw, th), false)
+			else:
+				_draw_text(p + Vector2(4, 20), "操作", 24, Color(0.3, 0.35, 0.5))
+		var zh_labels := {
+			"undo": "復原",
+			"reset": "重來",
+			"hint": "提示",
+			"map": "地圖",
+			"rules": "規則",
 		}
+		for id in btn_rects.keys():
+			var r: Rect2 = btn_rects[id]
+			_draw_icon_button(str(id), r)
+			# Tiny Traditional Chinese caption under icon
+			var cap: String = str(zh_labels.get(id, ""))
+			var fs := 13
+			var approx := cap.length() * fs * 0.9
+			_draw_text(Vector2(r.position.x + (r.size.x - approx) * 0.5, r.position.y + r.size.y + 14), cap, fs, Color(0.4, 0.35, 0.45))
+		var note_y: float = vp.y - 36.0
+		_draw_text(Vector2(panel.position.x + 20, note_y), "灰色石頭不會離開", 13, Color(0.5, 0.55, 0.6))
+
+
+func _draw_icon_button(id: String, r: Rect2) -> void:
+	var use_pressed: bool = (pressed_btn == id and press_flash_t > 0.0)
+	var tex: Texture2D = null
+	if use_pressed and tex_btn_pressed.has(id):
+		tex = tex_btn_pressed[id]
+	elif tex_btn.has(id):
+		tex = tex_btn[id]
+	if tex != null:
+		# Keep ≥48px touch area; draw icon filling the rect
+		draw_texture_rect(tex, r, false)
+	else:
 		var cols := {
 			"undo": Color(0.55, 0.7, 0.95),
 			"reset": Color(0.95, 0.7, 0.55),
@@ -433,49 +568,26 @@ func _draw_controls() -> void:
 			"map": Color(0.7, 0.85, 0.6),
 			"rules": Color(0.8, 0.75, 0.9),
 		}
-		for id in btn_rects.keys():
-			var r: Rect2 = btn_rects[id]
-			_draw_button(r, str(short.get(id, "?")), cols.get(id, Color(0.8, 0.8, 0.85)), true)
-	else:
-		var panel := _side_panel_rect()
-		_round_rect(panel, 18, Color(1, 1, 1, 0.78))
-		if help_lines_pos.x >= 0:
-			var p := help_lines_pos
-			_draw_text(p + Vector2(4, 20), "操作", 24, Color(0.3, 0.35, 0.5))
-			_draw_text(p + Vector2(4, 52), "拖曳／觸控滑動", 15, Color(0.4, 0.45, 0.55))
-			_draw_text(p + Vector2(4, 74), "方向鍵 / WASD", 15, Color(0.4, 0.45, 0.55))
-			_draw_text(p + Vector2(4, 96), "同色門才能出去", 15, Color(0.4, 0.45, 0.55))
-			_draw_text(p + Vector2(4, 118), "Z 復原　H 提示", 15, Color(0.4, 0.45, 0.55))
-		var labels := {
-			"undo": "↺  復原",
-			"reset": "⟳  重來",
-			"hint": "💡  提示",
-			"map": "🗺  關卡地圖",
-			"rules": "❓  規則",
-		}
-		var cols2 := {
-			"undo": Color(0.55, 0.7, 0.95),
-			"reset": Color(0.95, 0.7, 0.55),
-			"hint": Color(0.95, 0.85, 0.4),
-			"map": Color(0.7, 0.85, 0.6),
-			"rules": Color(0.8, 0.75, 0.9),
-		}
-		for id in btn_rects.keys():
-			_draw_button(btn_rects[id], str(labels.get(id, id)), cols2.get(id, Color.WHITE), false)
-		var note_y: float = vp.y - 36.0
-		_draw_text(Vector2(panel.position.x + 20, note_y), "灰色石頭不會離開", 13, Color(0.5, 0.55, 0.6))
+		_draw_button(r, id, cols.get(id, Color(0.8, 0.8, 0.85)), true)
 
 
 func _side_panel_rect() -> Rect2:
 	if btn_rects.is_empty():
 		return Rect2()
-	var first: Rect2 = btn_rects.values()[0]
-	var last: Rect2 = btn_rects.values()[btn_rects.size() - 1]
-	var left: float = first.position.x - 20.0
-	var top: float = hud_h + 20.0
-	var w: float = first.size.x + 40.0
-	var h: float = last.position.y + last.size.y - top + 40.0
-	return Rect2(left, top, w, maxf(h, 200.0))
+	var min_x := 1e9
+	var min_y := 1e9
+	var max_x := 0.0
+	var max_y := 0.0
+	for r in btn_rects.values():
+		min_x = minf(min_x, r.position.x)
+		min_y = minf(min_y, r.position.y)
+		max_x = maxf(max_x, r.position.x + r.size.x)
+		max_y = maxf(max_y, r.position.y + r.size.y)
+	var left: float = min_x - 24.0
+	var top: float = hud_h + 12.0
+	var w: float = (max_x - min_x) + 48.0
+	var h: float = max_y - top + 48.0
+	return Rect2(left, top, w, maxf(h, 240.0))
 
 
 func _draw_button(r: Rect2, label: String, col: Color, compact: bool = false) -> void:
@@ -543,16 +655,28 @@ func _rules_start_rect() -> Rect2:
 	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 24, bw, bh)
 
 
+
+func _draw_stars_row(center: Vector2, stars: int, star_size: float = 40.0) -> void:
+	var gap := star_size * 0.15
+	var total := 3.0 * star_size + 2.0 * gap
+	var x := center.x - total * 0.5
+	for i in 3:
+		var tex: Texture2D = tex_star_on if i < stars and tex_star_on != null else tex_star_off
+		var r := Rect2(x, center.y - star_size * 0.5, star_size, star_size)
+		if tex != null:
+			draw_texture_rect(tex, r, false)
+		else:
+			_draw_text(r.position + Vector2(4, star_size * 0.75), "★" if i < stars else "☆", int(star_size * 0.7), Color(1, 0.75, 0.2) if i < stars else Color(0.7, 0.7, 0.75))
+		x += star_size + gap
+
+
 func _draw_modal_clear() -> void:
 	_draw_modal_dim()
 	var r := _modal_rect(0.62, 0.7)
 	_round_rect(r, 24, Color(1, 0.98, 0.92))
 	_draw_text(r.position + Vector2(r.size.x * 0.28, 50), "過關啦！", 32, Color(0.85, 0.45, 0.2))
 	var stars: int = int(clear_result.get("stars", 0))
-	var star_str := ""
-	for i in 3:
-		star_str += "★" if i < stars else "☆"
-	_draw_text(r.position + Vector2(r.size.x * 0.32, 110), star_str, 44, Color(1.0, 0.75, 0.15))
+	_draw_stars_row(r.position + Vector2(r.size.x * 0.5, 110), stars, 44.0 if not is_narrow else 36.0)
 	_draw_text(r.position + Vector2(r.size.x * 0.28, 170), "分數 %d" % int(clear_result.get("total", 0)), 24, Color(0.3, 0.35, 0.5))
 	_draw_text(r.position + Vector2(24, 210), "步數分 %d　時間分 %d　連擊 +%d" % [
 		int(clear_result.get("moves", 0)),
@@ -634,10 +758,7 @@ func _draw_modal_map() -> void:
 			_draw_text(br.position + Vector2(br.size.x * 0.4, br.size.y - 36), "🔒", 24, Color(0.4, 0.4, 0.5))
 		else:
 			var st: int = int(best_stars[i]) if i < best_stars.size() else 0
-			var ss := ""
-			for s in 3:
-				ss += "★" if s < st else "☆"
-			_draw_text(br.position + Vector2(br.size.x * 0.2, br.size.y - 32), ss, 18, Color(1, 0.75, 0.2))
+			_draw_stars_row(br.position + Vector2(br.size.x * 0.5, br.size.y - 28), st, minf(28.0, br.size.x * 0.22))
 	var cw := minf(280.0, r.size.x - 48)
 	_draw_button(Rect2(r.position.x + (r.size.x - cw) * 0.5, r.position.y + r.size.y - close_h - 16, cw, close_h), "關閉", Color(0.75, 0.78, 0.85))
 
@@ -936,6 +1057,8 @@ func _do_hint() -> void:
 
 
 func _press_button(btn: String) -> void:
+	pressed_btn = btn
+	press_flash_t = 0.18
 	match btn:
 		"undo":
 			_do_undo()
