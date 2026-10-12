@@ -37,6 +37,8 @@ var hint_timer: float = 0.0
 var exit_anim: Dictionary = {}
 var toast: String = ""
 var toast_t: float = 0.0
+var skip_rules_howto: bool = false  # persisted: skip How-to on PLAY
+var rules_from_button: bool = false  # opened via Rules toolbar (not start)
 
 var bg_a := Color(0.93, 0.96, 1.0)
 var bg_b := Color(0.98, 0.93, 0.96)
@@ -71,6 +73,13 @@ var tex_btn: Dictionary = {}  # id -> Texture2D
 var tex_btn_pressed: Dictionary = {}
 var tex_gates: Dictionary = {}  # color name -> Texture2D
 var tex_badge: Dictionary = {}  # level/time/moves/score -> Texture2D
+var tex_modal_rules: Texture2D
+var tex_modal_clear: Texture2D
+var tex_check_on: Texture2D
+var tex_check_off: Texture2D
+var tex_fun_orange: Texture2D
+var tex_fun_green: Texture2D
+var tex_fun_blue: Texture2D
 var pressed_btn: String = ""
 var press_flash_t: float = 0.0
 
@@ -94,6 +103,13 @@ func _load_ui_art() -> void:
 		tex_badge[id] = _tex("res://assets/ui/badge_%s.png" % id)
 	for c in ["red", "blue", "green", "yellow", "purple", "orange"]:
 		tex_gates[c] = _tex("res://assets/ui/gate_%s.png" % c)
+	tex_modal_rules = _tex("res://assets/ui/modal_rules.png")
+	tex_modal_clear = _tex("res://assets/ui/modal_clear.png")
+	tex_check_on = _tex("res://assets/ui/checkbox_on.png")
+	tex_check_off = _tex("res://assets/ui/checkbox_off.png")
+	tex_fun_orange = _tex("res://assets/ui/btn_fun_orange.png")
+	tex_fun_green = _tex("res://assets/ui/btn_fun_green.png")
+	tex_fun_blue = _tex("res://assets/ui/btn_fun_blue.png")
 
 
 func _tex(path: String) -> Texture2D:
@@ -111,6 +127,7 @@ func _tex(path: String) -> Texture2D:
 
 
 func _ready() -> void:
+	texture_filter = CanvasItem.TEXTURE_FILTER_LINEAR
 	font = load("res://assets/fonts/NotoSansCJK-Regular.ttc")
 	if font == null:
 		font = ThemeDB.fallback_font
@@ -137,15 +154,22 @@ func _recompute_layout() -> void:
 	# Portrait-only: always use board + bottom toolbar (even if window is wide).
 	is_narrow = true
 	var margin := 14.0
-	var top_pad := 10.0
+	var top_pad := 2.0
 
-	# Raymond logo as big header title (clear & large)
+	# Raymond bubble logo — full title visible, aspect preserved
 	var banner: Texture2D = tex_logo if tex_logo != null else (tex_title if tex_title != null else tex_title_sm)
-	var bw: float = vp.x - 8.0
-	var bh: float = 140.0
+	var max_w: float = vp.x - 4.0
+	# Tall enough for full Raymond logo at nearly full width
+	var max_h: float = clampf(vp.y * 0.34, 240.0, 310.0)
+	var bw: float = max_w
+	var bh: float = 200.0
 	if banner != null:
-		bh = bw * float(banner.get_height()) / float(banner.get_width())
-		bh = clampf(bh, 120.0, 168.0)
+		var aspect: float = float(banner.get_width()) / float(maxi(1, banner.get_height()))
+		bw = max_w
+		bh = bw / aspect
+		if bh > max_h:
+			bh = max_h
+			bw = bh * aspect
 	title_rect = Rect2((vp.x - bw) * 0.5, top_pad, bw, bh)
 	# PLAY hit zone on start screen (matches orange button + hand pad)
 	var pw: float = vp.x * 0.62
@@ -156,7 +180,7 @@ func _recompute_layout() -> void:
 	var badge_h: float = clampf(vp.x * 0.145, 50.0, 60.0)
 	var badge_gap: float = 5.0
 	var badge_pad: float = 8.0
-	var badge_y: float = title_rect.position.y + title_rect.size.y + 4.0
+	var badge_y: float = title_rect.position.y + title_rect.size.y + 8.0
 	var ids_b := ["level", "time", "moves", "score"]
 	var n_b := ids_b.size()
 	var badge_w: float = (vp.x - badge_pad * 2.0 - badge_gap * float(n_b - 1)) / float(n_b)
@@ -213,12 +237,14 @@ func _load_progress() -> void:
 		if cfg.load("user://cbe_progress.cfg") == OK:
 			unlocked = int(cfg.get_value("p", "unlocked", 1))
 			best_stars = cfg.get_value("p", "stars", best_stars)
+			skip_rules_howto = bool(cfg.get_value("p", "skip_rules", false))
 
 
 func _save_progress() -> void:
 	var cfg := ConfigFile.new()
 	cfg.set_value("p", "unlocked", unlocked)
 	cfg.set_value("p", "stars", best_stars)
+	cfg.set_value("p", "skip_rules", skip_rules_howto)
 	cfg.save("user://cbe_progress.cfg")
 
 
@@ -624,8 +650,13 @@ func _modal_rect(frac_w: float = 0.72, frac_h: float = 0.78) -> Rect2:
 	var w: float = clampf(vp.x * frac_w, 280.0, 880.0)
 	var h: float = clampf(vp.y * frac_h, 320.0, 600.0)
 	if is_narrow:
-		w = vp.x - 24.0
-		h = minf(vp.y - 40.0, h)
+		w = vp.x - 20.0
+		# Sit below logo so full title stays visible behind/above modal
+		var top: float = title_rect.position.y + title_rect.size.y + 6.0
+		var bottom_pad: float = 12.0
+		h = minf(vp.y - top - bottom_pad, h)
+		h = maxf(h, 300.0)
+		return Rect2((vp.x - w) * 0.5, top, w, h)
 	return Rect2((vp.x - w) * 0.5, (vp.y - h) * 0.5, w, h)
 
 
@@ -635,35 +666,81 @@ func _draw_modal_dim() -> void:
 
 func _draw_modal_rules() -> void:
 	_draw_modal_dim()
-	var r := _modal_rect(0.7, 0.82)
-	_round_rect(r, 24, Color(1, 0.99, 0.96))
-	_draw_text(r.position + Vector2(28, 44), "怎麼玩？", 28 if is_narrow else 32, Color(0.3, 0.35, 0.5))
+	var r := _modal_rect(0.92, 0.86)
+	# Cartoon candy panel
+	if tex_modal_rules != null:
+		draw_texture_rect(tex_modal_rules, r, false)
+	else:
+		_round_rect(r, 28, Color(1.0, 0.99, 0.94))
+		draw_rect(r, Color(1.0, 0.55, 0.28), false, 5.0)
+	# Big playful title
+	var title := "怎麼玩？"
+	var fs_title := 34 if is_narrow else 40
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_title).x
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 72), title, fs_title, Color(1.0, 0.45, 0.25), true)
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5 + 1, r.position.y + 73), title, fs_title, Color(1.0, 0.55, 0.2), false)
+
 	var lines := [
-		"1. 把彩色方塊滑到同顏色的門，讓它們逃脫！",
-		"2. 一次拖曳同一塊算一步；沒動就不計步。",
-		"3. 灰色石頭是障礙，永遠不會離開。",
-		"4. 有 ↔ / ↕ 標記的方塊只能橫／直移動。",
-		"5. 結冰方塊要先讓其他顏色逃脫才解凍。",
-		"6. 步數越少、時間越快，星星越多！",
-		"7. 連續逃脫可獲得連擊加分。",
+		"① 把彩色方塊滑到同色門，讓它們逃脫！",
+		"② 一次拖同一塊算一步；沒動就不計。",
+		"③ 灰色石頭是障礙，永遠不會離開。",
+		"④ 有 ↔ / ↕ 的方塊只能橫／直走。",
+		"⑤ 結冰方塊要先讓其他顏色逃脫才解凍。",
+		"⑥ 步數少、時間快 → 星星越多！",
+		"⑦ 連續逃脫可拿連擊加分喔～",
 	]
-	var fs := 15 if is_narrow else 20
-	var y := 78.0 if is_narrow else 100.0
-	var step := 28.0 if is_narrow else 42.0
-	for line in lines:
-		_draw_text(r.position + Vector2(24, y), line, fs, Color(0.35, 0.4, 0.5))
+	var fs := 15 if is_narrow else 18
+	var y := 108.0
+	var step := 30.0 if is_narrow else 36.0
+	var colors := [
+		Color(0.95, 0.35, 0.4), Color(0.95, 0.55, 0.15), Color(0.2, 0.55, 0.9),
+		Color(0.25, 0.65, 0.35), Color(0.55, 0.4, 0.85), Color(0.9, 0.5, 0.2), Color(0.35, 0.45, 0.6),
+	]
+	for i in lines.size():
+		_draw_text(r.position + Vector2(28, y), str(lines[i]), fs, colors[i % colors.size()], true)
 		y += step
-	var bw := minf(300.0, r.size.x - 48.0)
-	var bh := maxf(MIN_TOUCH, 52.0)
-	_draw_button(Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 24, bw, bh), "開始遊戲！", Color(0.45, 0.85, 0.55))
+
+	# Checkbox: 下次不要再顯示
+	var cb := _rules_checkbox_rect()
+	var ctex: Texture2D = tex_check_on if skip_rules_howto and tex_check_on != null else tex_check_off
+	if ctex != null:
+		draw_texture_rect(ctex, cb, false)
+	else:
+		_round_rect(cb, 8, Color(1, 1, 1))
+		draw_rect(cb, Color(0.4, 0.6, 0.9), false, 2.0)
+		if skip_rules_howto:
+			_draw_text(cb.position + Vector2(8, 28), "✓", 22, Color(0.2, 0.7, 0.35))
+	_draw_text(Vector2(cb.position.x + cb.size.x + 10, cb.position.y + cb.size.y * 0.72), "下次不要再顯示", 16, Color(0.4, 0.45, 0.55), true)
+
+	# Big green start button
+	var br := _rules_start_rect()
+	_draw_fun_button(br, "開始遊戲！", Color(0.4, 0.85, 0.5), tex_fun_green)
+
+
+func _rules_checkbox_rect() -> Rect2:
+	var r := _modal_rect(0.92, 0.86)
+	var side := 40.0
+	var start := _rules_start_rect()
+	return Rect2(r.position.x + 28, start.position.y - side - 18, side, side)
 
 
 func _rules_start_rect() -> Rect2:
-	var r := _modal_rect(0.7, 0.82)
-	var bw := minf(300.0, r.size.x - 48.0)
-	var bh := maxf(MIN_TOUCH, 52.0)
-	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 24, bw, bh)
+	var r := _modal_rect(0.92, 0.86)
+	var bw := minf(320.0, r.size.x - 48.0)
+	var bh := maxf(MIN_TOUCH + 8.0, 60.0)
+	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 28, bw, bh)
 
+
+func _draw_fun_button(r: Rect2, label: String, col: Color, tex: Texture2D = null) -> void:
+	if tex != null:
+		draw_texture_rect(tex, r, false)
+	else:
+		_round_rect(Rect2(r.position + Vector2(2, 4), r.size), 18, Color(0, 0, 0, 0.15))
+		_round_rect(r, 18, col)
+		_round_rect(Rect2(r.position + Vector2(8, 6), Vector2(r.size.x - 16, mini(16.0, r.size.y * 0.3))), 10, Color(1, 1, 1, 0.3))
+	var fs := int(clampf(r.size.y * 0.42, 20.0, 28.0))
+	var sz := font.get_string_size(label, HORIZONTAL_ALIGNMENT_LEFT, -1, fs)
+	_draw_text(Vector2(r.position.x + (r.size.x - sz.x) * 0.5, r.position.y + r.size.y * 0.68), label, fs, Color(1, 1, 1), true)
 
 
 func _draw_stars_row(center: Vector2, stars: int, star_size: float = 40.0) -> void:
@@ -682,34 +759,56 @@ func _draw_stars_row(center: Vector2, stars: int, star_size: float = 40.0) -> vo
 
 func _draw_modal_clear() -> void:
 	_draw_modal_dim()
-	var r := _modal_rect(0.62, 0.7)
-	_round_rect(r, 24, Color(1, 0.98, 0.92))
-	_draw_text(r.position + Vector2(r.size.x * 0.28, 50), "過關啦！", 32, Color(0.85, 0.45, 0.2))
+	var r := _modal_rect(0.9, 0.72)
+	if tex_modal_clear != null:
+		draw_texture_rect(tex_modal_clear, r, false)
+	else:
+		_round_rect(r, 28, Color(1.0, 0.98, 0.9))
+		draw_rect(r, Color(1.0, 0.7, 0.25), false, 5.0)
+	# Burst title
+	var title := "過關啦！"
+	var fs_title := 38
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_title).x
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5 + 2, r.position.y + 78), title, fs_title, Color(0.9, 0.35, 0.1), true)
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 76), title, fs_title, Color(1.0, 0.5, 0.15), false)
+	# Confetti sparkles
+	var tsec := Time.get_ticks_msec() * 0.004
+	for i in 8:
+		var ang := i * PI * 0.25 + tsec
+		var px := r.position.x + r.size.x * 0.5 + cos(ang) * (70.0 + (i % 3) * 12.0)
+		var py := r.position.y + 130.0 + sin(ang) * 18.0
+		draw_circle(Vector2(px, py), 4.0 + (i % 3), Color(1.0, 0.85, 0.3, 0.85))
+
 	var stars: int = int(clear_result.get("stars", 0))
-	_draw_stars_row(r.position + Vector2(r.size.x * 0.5, 110), stars, 44.0 if not is_narrow else 36.0)
-	_draw_text(r.position + Vector2(r.size.x * 0.28, 170), "分數 %d" % int(clear_result.get("total", 0)), 24, Color(0.3, 0.35, 0.5))
-	_draw_text(r.position + Vector2(24, 210), "步數分 %d　時間分 %d　連擊 +%d" % [
+	_draw_stars_row(r.position + Vector2(r.size.x * 0.5, 155), stars, 52.0)
+
+	var score_txt := "分數 %d" % int(clear_result.get("total", 0))
+	var fs_sc := 28
+	var sw := font.get_string_size(score_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_sc).x
+	_draw_text(Vector2(r.position.x + (r.size.x - sw) * 0.5, r.position.y + 220), score_txt, fs_sc, Color(0.95, 0.45, 0.15), true)
+
+	var detail := "步數分 %d　時間分 %d　連擊 +%d" % [
 		int(clear_result.get("moves", 0)),
 		int(clear_result.get("time", 0)),
 		int(clear_result.get("combo", 0)),
-	], 15 if is_narrow else 18, Color(0.45, 0.5, 0.55))
-	var bh := maxf(MIN_TOUCH, 52.0)
-	var gapb := 12.0
-	var row_y := r.position.y + r.size.y - bh * 2 - gapb - 28
-	var half := (r.size.x - 48 - gapb) * 0.5
-	_draw_button(Rect2(r.position.x + 24, row_y, half, bh), "再玩一次", Color(0.95, 0.75, 0.45))
-	_draw_button(Rect2(r.position.x + 24 + half + gapb, row_y, half, bh), "下一關 ▶", Color(0.45, 0.85, 0.55))
-	var mw := minf(280.0, r.size.x - 48)
-	_draw_button(Rect2(r.position.x + (r.size.x - mw) * 0.5, row_y + bh + gapb, mw, bh), "關卡地圖", Color(0.7, 0.8, 0.95))
+	]
+	var fs_d := 14
+	var dw := font.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_d).x
+	_draw_text(Vector2(r.position.x + (r.size.x - dw) * 0.5, r.position.y + 252), detail, fs_d, Color(0.5, 0.45, 0.4), true)
+
+	var btns := _clear_buttons()
+	_draw_fun_button(btns.replay, "再玩一次", Color(1.0, 0.65, 0.3), tex_fun_orange)
+	_draw_fun_button(btns.next, "下一關 ▶", Color(0.4, 0.85, 0.5), tex_fun_green)
+	_draw_fun_button(btns.map, "關卡地圖", Color(0.45, 0.7, 0.95), tex_fun_blue)
 
 
 func _clear_buttons() -> Dictionary:
-	var r := _modal_rect(0.62, 0.7)
-	var bh := maxf(MIN_TOUCH, 52.0)
+	var r := _modal_rect(0.9, 0.72)
+	var bh := maxf(MIN_TOUCH + 8.0, 58.0)
 	var gapb := 12.0
-	var row_y := r.position.y + r.size.y - bh * 2 - gapb - 28
+	var row_y := r.position.y + r.size.y - bh * 2 - gapb - 36
 	var half := (r.size.x - 48 - gapb) * 0.5
-	var mw := minf(280.0, r.size.x - 48)
+	var mw := minf(300.0, r.size.x - 48)
 	return {
 		"replay": Rect2(r.position.x + 24, row_y, half, bh),
 		"next": Rect2(r.position.x + 24 + half + gapb, row_y, half, bh),
@@ -719,32 +818,45 @@ func _clear_buttons() -> Dictionary:
 
 func _draw_modal_fail() -> void:
 	_draw_modal_dim()
-	var r := _modal_rect(0.55, 0.42)
-	_round_rect(r, 24, Color(1, 0.95, 0.95))
-	_draw_text(r.position + Vector2(r.size.x * 0.22, 56), "時間到了…", 28, Color(0.75, 0.3, 0.3))
-	_draw_text(r.position + Vector2(28, 110), "超過三分鐘，再試一次吧！", 18, Color(0.45, 0.4, 0.4))
-	var bw := minf(300.0, r.size.x - 48)
-	var bh := maxf(MIN_TOUCH, 52.0)
-	_draw_button(Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 28, bw, bh), "重新挑戰", Color(0.95, 0.6, 0.5))
+	var r := _modal_rect(0.88, 0.42)
+	if tex_modal_clear != null:
+		draw_texture_rect(tex_modal_clear, r, false)
+	else:
+		_round_rect(r, 28, Color(1, 0.95, 0.95))
+	var title := "時間到了…"
+	var fs_t := 30
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_t).x
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 80), title, fs_t, Color(0.9, 0.35, 0.35), true)
+	var msg := "超過三分鐘，再試一次吧！"
+	var fs_m := 16
+	var mw2 := font.get_string_size(msg, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_m).x
+	_draw_text(Vector2(r.position.x + (r.size.x - mw2) * 0.5, r.position.y + 130), msg, fs_m, Color(0.5, 0.4, 0.4), true)
+	_draw_fun_button(_fail_retry_rect(), "重新挑戰", Color(1.0, 0.55, 0.45), tex_fun_orange)
 
 
 func _fail_retry_rect() -> Rect2:
-	var r := _modal_rect(0.55, 0.42)
+	var r := _modal_rect(0.88, 0.42)
 	var bw := minf(300.0, r.size.x - 48)
-	var bh := maxf(MIN_TOUCH, 52.0)
-	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 28, bw, bh)
+	var bh := maxf(MIN_TOUCH + 8.0, 58.0)
+	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 32, bw, bh)
 
 
 func _draw_modal_map() -> void:
 	_draw_modal_dim()
-	var r := _modal_rect(0.85, 0.85)
-	_round_rect(r, 24, Color(0.98, 0.99, 1.0))
-	_draw_text(r.position + Vector2(28, 40), "關卡地圖", 26 if is_narrow else 30, Color(0.3, 0.35, 0.5))
+	var r := _modal_rect(0.92, 0.88)
+	if tex_modal_rules != null:
+		draw_texture_rect(tex_modal_rules, r, false)
+	else:
+		_round_rect(r, 28, Color(0.98, 0.99, 1.0))
+	var title := "關卡地圖"
+	var fs_t := 28
+	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_t).x
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 58), title, fs_t, Color(1.0, 0.45, 0.25), true)
 	var cols := 2 if is_narrow else 4
 	var rows := int(ceil(float(LevelData.level_count()) / float(cols)))
 	var pad := 12.0 if is_narrow else 20.0
-	var close_h := maxf(MIN_TOUCH, 48.0)
-	var grid_top := 70.0
+	var close_h := maxf(MIN_TOUCH + 8.0, 56.0)
+	var grid_top := 90.0
 	var grid_h := r.size.y - grid_top - close_h - 36.0
 	var cell_w := (r.size.x - pad * (cols + 1)) / float(cols)
 	var cell_h := (grid_h - pad * (rows - 1)) / float(rows)
@@ -770,16 +882,16 @@ func _draw_modal_map() -> void:
 			var st: int = int(best_stars[i]) if i < best_stars.size() else 0
 			_draw_stars_row(br.position + Vector2(br.size.x * 0.5, br.size.y - 28), st, minf(28.0, br.size.x * 0.22))
 	var cw := minf(280.0, r.size.x - 48)
-	_draw_button(Rect2(r.position.x + (r.size.x - cw) * 0.5, r.position.y + r.size.y - close_h - 16, cw, close_h), "關閉", Color(0.75, 0.78, 0.85))
+	_draw_fun_button(Rect2(r.position.x + (r.size.x - cw) * 0.5, r.position.y + r.size.y - close_h - 20, cw, close_h), "關閉", Color(0.75, 0.78, 0.85), tex_fun_blue)
 
 
 func _map_layout() -> Dictionary:
-	var r := _modal_rect(0.85, 0.85)
+	var r := _modal_rect(0.92, 0.88)
 	var cols := 2 if is_narrow else 4
 	var rows := int(ceil(float(LevelData.level_count()) / float(cols)))
 	var pad := 12.0 if is_narrow else 20.0
-	var close_h := maxf(MIN_TOUCH, 48.0)
-	var grid_top := 70.0
+	var close_h := maxf(MIN_TOUCH + 8.0, 56.0)
+	var grid_top := 90.0
 	var grid_h := r.size.y - grid_top - close_h - 36.0
 	var cell_w := (r.size.x - pad * (cols + 1)) / float(cols)
 	var cell_h := (grid_h - pad * (rows - 1)) / float(rows)
@@ -794,7 +906,7 @@ func _map_layout() -> Dictionary:
 		))
 	var cw := minf(280.0, r.size.x - 48)
 	return {
-		"close": Rect2(r.position.x + (r.size.x - cw) * 0.5, r.position.y + r.size.y - close_h - 16, cw, close_h),
+		"close": Rect2(r.position.x + (r.size.x - cw) * 0.5, r.position.y + r.size.y - close_h - 20, cw, close_h),
 		"tiles": tiles,
 	}
 
@@ -822,6 +934,7 @@ func _input(event: InputEvent) -> void:
 		if show_rules:
 			if event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]:
 				show_rules = false
+				rules_from_button = false
 				running = true
 				queue_redraw()
 			return
@@ -895,9 +1008,22 @@ func _pointer_down(pos: Vector2) -> void:
 			_leave_start_screen()
 		return
 	if show_rules:
-		var modal := _modal_rect(0.7, 0.82)
-		if modal.has_point(pos) or _rules_start_rect().has_point(pos):
+		if _rules_checkbox_rect().has_point(pos):
+			skip_rules_howto = not skip_rules_howto
+			_save_progress()
+			queue_redraw()
+			return
+		if _rules_start_rect().has_point(pos):
 			show_rules = false
+			rules_from_button = false
+			running = true
+			queue_redraw()
+			return
+		# Tap outside modal while opened from toolbar: dismiss
+		var modal := _modal_rect(0.92, 0.86)
+		if rules_from_button and not modal.has_point(pos):
+			show_rules = false
+			rules_from_button = false
 			running = true
 			queue_redraw()
 		return
@@ -1077,8 +1203,13 @@ func _do_hint() -> void:
 
 func _leave_start_screen() -> void:
 	show_start = false
-	show_rules = true
-	running = false
+	rules_from_button = false
+	if skip_rules_howto:
+		show_rules = false
+		running = true
+	else:
+		show_rules = true
+		running = false
 	queue_redraw()
 
 
@@ -1098,6 +1229,7 @@ func _press_button(btn: String) -> void:
 			show_map = true
 			running = false
 		"rules":
+			rules_from_button = true
 			show_rules = true
 			running = false
 	queue_redraw()
