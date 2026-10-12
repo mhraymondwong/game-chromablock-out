@@ -441,3 +441,206 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
+
+
+# --- Mockup restyle: wood hanging badges, board frame, gate arrows, sky rainbow ---
+
+WOOD = (196, 148, 96)
+WOOD_DK = (150, 105, 62)
+WOOD_LT = (230, 190, 140)
+WOOD_EDGE = (120, 80, 45)
+FLOWER_COLORS = {
+    "level": (110, 170, 255),
+    "time": (190, 130, 240),
+    "moves": (255, 110, 130),
+    "score": (255, 210, 70),
+}
+
+
+def wood_grain(d, box, seed=0):
+    x0, y0, x1, y1 = box
+    for i in range(8):
+        y = y0 + 8 + i * ((y1 - y0 - 16) // 8)
+        a = 18 + (i + seed) % 5 * 4
+        d.line([(x0 + 10, y), (x1 - 10, y + (i % 3) - 1)], fill=(*WOOD_DK, a), width=1)
+
+
+def make_wood_badge(name: str, w: int = 240, h: int = 120) -> Image.Image:
+    """Wooden hanging sign with twine pins + corner flower (mockup style)."""
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, "RGBA")
+    # hanging pins + twine
+    pin_y = 10
+    for px in (int(w * 0.22), int(w * 0.78)):
+        soft_circle(d, (px, pin_y), 5, (150, 155, 160, 255))
+        soft_circle(d, (px - 1, pin_y - 1), 2, (230, 230, 235, 200))
+        d.line([(px, pin_y + 4), (px, 22)], fill=(130, 130, 140, 200), width=2)
+    # soft shadow
+    round_rect(d, [8, 28, w - 4, h - 4], 18, (0, 0, 0, 40))
+    # wood plate
+    round_rect(d, [6, 22, w - 8, h - 8], 18, (*WOOD, 255), outline=(*WOOD_EDGE, 230), width=3)
+    wood_grain(d, [10, 26, w - 12, h - 12], seed=hash(name) % 7)
+    # top gloss
+    d.rounded_rectangle([14, 28, w - 16, 42], 8, fill=(255, 255, 255, 55))
+    # bottom-right flower accent
+    fx, fy = w - 28, h - 26
+    fcol = FLOWER_COLORS.get(name, (255, 160, 180))
+    for ang in range(0, 360, 60):
+        rad = math.radians(ang)
+        soft_circle(d, (int(fx + math.cos(rad) * 7), int(fy + math.sin(rad) * 7)), 5, (*fcol, 230))
+    soft_circle(d, (fx, fy), 4, (255, 230, 90, 255))
+    return im
+
+
+def make_board_wood_frame(size: int = 512, border: int = 48) -> Image.Image:
+    """Thick polished wood frame with corner screws; center transparent for board cells."""
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, "RGBA")
+    # outer shadow
+    round_rect(d, [4, 8, size - 2, size - 2], 28, (0, 0, 0, 45))
+    # wood body
+    round_rect(d, [2, 2, size - 6, size - 8], 26, (*WOOD, 255), outline=(*WOOD_EDGE, 255), width=4)
+    wood_grain(d, [8, 8, size - 12, size - 14], seed=3)
+    # inner bevel (lighter)
+    inset = border
+    round_rect(
+        d,
+        [inset - 4, inset - 4, size - inset - 2, size - inset - 6],
+        14,
+        (0, 0, 0, 0),
+        outline=(*WOOD_LT, 200),
+        width=3,
+    )
+    # punch transparent center (with soft beige cell plate behind cells drawn in-engine)
+    clear = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    cd = ImageDraw.Draw(clear, "RGBA")
+    # Keep frame only: draw opaque then cut hole by compositing
+    mask = Image.new("L", (size, size), 0)
+    md = ImageDraw.Draw(mask)
+    md.rounded_rectangle([inset, inset, size - inset - 4, size - inset - 6], 12, fill=255)
+    # beige inner plate
+    plate = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    pd = ImageDraw.Draw(plate, "RGBA")
+    round_rect(pd, [inset, inset, size - inset - 4, size - inset - 6], 12, (235, 220, 195, 255))
+    # Apply: frame with hole + plate under hole
+    frame_only = im.copy()
+    # Clear center of frame
+    datas = frame_only.getdata()
+    mask_data = mask.getdata()
+    new_data = []
+    for i, px in enumerate(datas):
+        if mask_data[i] > 200:
+            new_data.append((0, 0, 0, 0))
+        else:
+            new_data.append(px)
+    frame_only.putdata(new_data)
+    out = Image.alpha_composite(plate, frame_only)
+    # corner screws
+    od = ImageDraw.Draw(out, "RGBA")
+    screw_r = 9
+    offs = border // 2 + 2
+    for sx, sy in [(offs, offs), (size - offs - 8, offs), (offs, size - offs - 10), (size - offs - 8, size - offs - 10)]:
+        soft_circle(od, (sx, sy), screw_r + 1, (90, 95, 100, 200))
+        soft_circle(od, (sx, sy), screw_r, (200, 205, 210, 255))
+        soft_circle(od, (sx - 2, sy - 2), 3, (255, 255, 255, 180))
+        od.line([(sx - 5, sy), (sx + 5, sy)], fill=(120, 125, 130, 220), width=2)
+        od.line([(sx, sy - 5), (sx, sy + 5)], fill=(120, 125, 130, 220), width=2)
+    return out
+
+
+def make_gate_arrow(color_rgb, side: str = "right", size: int = 128) -> Image.Image:
+    """Glowing capsule exit bar + arrow indicator (mockup)."""
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, "RGBA")
+    cx = cy = size // 2
+    # soft glow
+    for i, a in enumerate([40, 70, 110]):
+        r = 28 + (2 - i) * 10
+        soft_circle(d, (cx, cy), r, (*color_rgb, a))
+    # vertical capsule bar
+    bar_w, bar_h = 28, 88
+    if side in ("left", "right"):
+        round_rect(d, [cx - bar_w // 2, cy - bar_h // 2, cx + bar_w // 2, cy + bar_h // 2], 14, (*color_rgb, 240), outline=(255, 255, 255, 200), width=3)
+        # gloss
+        round_rect(d, [cx - bar_w // 2 + 4, cy - bar_h // 2 + 8, cx - 2, cy + bar_h // 2 - 8], 8, (255, 255, 255, 90))
+        # arrow
+        if side == "right":
+            # outward →
+            tip = (cx + 48, cy)
+            d.polygon([(tip[0], tip[1]), (cx + 22, cy - 16), (cx + 22, cy + 16)], fill=(*color_rgb, 255))
+            d.polygon([(tip[0], tip[1]), (cx + 22, cy - 16), (cx + 22, cy + 16)], outline=(255, 255, 255, 220))
+        else:
+            # inward → toward board (pointing right into grid from left)
+            tip = (cx + 42, cy)
+            d.polygon([(tip[0], tip[1]), (cx + 16, cy - 16), (cx + 16, cy + 16)], fill=(*color_rgb, 255))
+    else:
+        # horizontal for top/bottom
+        bar_w, bar_h = 88, 28
+        round_rect(d, [cx - bar_w // 2, cy - bar_h // 2, cx + bar_w // 2, cy + bar_h // 2], 14, (*color_rgb, 240), outline=(255, 255, 255, 200), width=3)
+        if side == "bottom":
+            tip = (cx, cy + 48)
+            d.polygon([(tip[0], tip[1]), (cx - 16, cy + 22), (cx + 16, cy + 22)], fill=(*color_rgb, 255))
+        else:
+            tip = (cx, cy + 42)
+            d.polygon([(tip[0], tip[1]), (cx - 16, cy + 16), (cx + 16, cy + 16)], fill=(*color_rgb, 255))
+    return im
+
+
+def make_background_with_rainbow(w: int = 720, h: int = 1280) -> Image.Image:
+    """Sky playroom + soft rainbow arc near header."""
+    base = make_background(w, h)
+    layer = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(layer, "RGBA")
+    # pastel rainbow behind title area
+    colors = [
+        (255, 140, 160, 90),
+        (255, 190, 120, 90),
+        (255, 230, 120, 90),
+        (140, 220, 150, 90),
+        (130, 190, 255, 90),
+        (190, 160, 240, 90),
+    ]
+    cx, cy = int(w * 0.5), int(h * 0.02)
+    for i, col in enumerate(colors):
+        r_out = int(w * 0.62) - i * 10
+        r_in = r_out - 9
+        # draw arc as thick ring segments
+        bbox = [cx - r_out, cy - r_out // 3, cx + r_out, cy + r_out]
+        d.arc(bbox, 200, 340, fill=col, width=9)
+    return Image.alpha_composite(base, layer)
+
+
+def gen_mockup_restyle() -> None:
+    print("Generating mockup restyle assets →", OUT)
+    save(make_background_with_rainbow(720, 1280), "bg_playroom_portrait.png")
+    save(make_background_with_rainbow(1280, 720), "bg_playroom.png")
+    for name in BADGE_COLORS:
+        save(make_wood_badge(name, 240, 120), f"badge_{name}.png")
+    save(make_board_wood_frame(512, 48), "board_wood_frame.png")
+    for name, rgb in GATE_COLORS.items():
+        save(make_gate_arrow(rgb, "right", 128), f"gate_{name}.png")
+        save(make_gate_arrow(rgb, "left", 128), f"gate_arrow_left_{name}.png")
+        save(make_gate_arrow(rgb, "right", 128), f"gate_arrow_right_{name}.png")
+        save(make_gate_arrow(rgb, "bottom", 128), f"gate_arrow_bottom_{name}.png")
+        save(make_gate_arrow(rgb, "top", 128), f"gate_arrow_top_{name}.png")
+    # Regenerate glossy buttons with mockup-ish colors
+    BTN_COLORS["undo"] = (100, 170, 245)
+    BTN_COLORS["reset"] = (235, 90, 100)
+    BTN_COLORS["hint"] = (255, 175, 55)
+    BTN_COLORS["map"] = (90, 200, 120)
+    BTN_COLORS["rules"] = (170, 130, 235)
+    for name in BTN_COLORS:
+        save(make_button(name, 192, False), f"btn_{name}.png")
+        save(make_button(name, 192, True), f"btn_{name}_pressed.png")
+    # Transparent toolbar (labels drawn in-engine)
+    im = Image.new("RGBA", (720, 160), (0, 0, 0, 0))
+    save(im, "toolbar_bar.png")
+    print("Mockup restyle assets done.")
+
+
+if __name__ == "__main__":
+    import sys
+    if len(sys.argv) > 1 and sys.argv[1] == "mockup":
+        gen_mockup_restyle()
+    else:
+        main()
