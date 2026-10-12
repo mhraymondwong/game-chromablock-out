@@ -32,6 +32,13 @@ GATE_COLORS = {
     "orange": (255, 150, 70),
 }
 
+BADGE_COLORS = {
+    "level": (255, 140, 170),
+    "time": (90, 200, 170),
+    "moves": (255, 170, 90),
+    "score": (255, 210, 70),
+}
+
 
 def save(im: Image.Image, name: str) -> Path:
     path = OUT / name
@@ -47,6 +54,54 @@ def soft_circle(draw, xy, r, fill, outline=None, width=1):
 
 def round_rect(draw, box, radius, fill, outline=None, width=1):
     draw.rounded_rectangle(box, radius=radius, fill=fill, outline=outline, width=width)
+
+
+def load_cjk_font(size: int):
+    font_paths = [
+        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+        str(ROOT / "assets" / "fonts" / "NotoSansCJK-Regular.ttc"),
+        "/usr/share/fonts/truetype/noto/NotoSansCJK-Bold.ttc",
+        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
+    ]
+    for fp in font_paths:
+        if os.path.exists(fp):
+            try:
+                return ImageFont.truetype(fp, size)
+            except Exception:
+                continue
+    return ImageFont.load_default()
+
+
+def draw_cute_cube(d, cx, cy, size, col):
+    """Friendly square character with eyes and smile."""
+    half = size // 2
+    round_rect(
+        d,
+        [cx - half, cy - half, cx + half, cy + half],
+        max(6, size // 5),
+        (*col, 255),
+        outline=(255, 255, 255, 230),
+        width=max(2, size // 16),
+    )
+    # gloss
+    round_rect(
+        d,
+        [cx - half + 4, cy - half + 4, cx + half - 4, cy - half + size // 3],
+        6,
+        (255, 255, 255, 90),
+    )
+    eye_r = max(2, size // 12)
+    soft_circle(d, (cx - size // 5, cy - size // 10), eye_r, (40, 40, 55, 240))
+    soft_circle(d, (cx + size // 5, cy - size // 10), eye_r, (40, 40, 55, 240))
+    soft_circle(d, (cx - size // 5 - 1, cy - size // 10 - 1), max(1, eye_r // 2), (255, 255, 255, 200))
+    soft_circle(d, (cx + size // 5 - 1, cy - size // 10 - 1), max(1, eye_r // 2), (255, 255, 255, 200))
+    d.arc(
+        [cx - size // 5, cy, cx + size // 5, cy + size // 4],
+        20,
+        160,
+        fill=(40, 40, 55, 230),
+        width=max(2, size // 18),
+    )
 
 
 def draw_icon(draw: ImageDraw.ImageDraw, kind: str, cx: int, cy: int, s: int) -> None:
@@ -118,29 +173,29 @@ def draw_icon(draw: ImageDraw.ImageDraw, kind: str, cx: int, cy: int, s: int) ->
         draw.text((cx - tw // 2 - 1, cy - th // 2 - 6), "?", font=font, fill=white)
 
 
-def make_button(name: str, size: int = 128, pressed: bool = False) -> Image.Image:
+def make_button(name: str, size: int = 192, pressed: bool = False) -> Image.Image:
     face = BTN_COLORS[name]
     im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im, "RGBA")
-    pad = 6
-    cy_off = 4 if pressed else 0
+    pad = 8
+    cy_off = 6 if pressed else 0
     if not pressed:
-        soft_circle(draw, (size // 2 + 2, size // 2 + 5), size // 2 - pad, (0, 0, 0, 55))
+        soft_circle(draw, (size // 2 + 3, size // 2 + 8), size // 2 - pad, (0, 0, 0, 55))
     soft_circle(draw, (size // 2, size // 2 + cy_off), size // 2 - pad, (255, 255, 255, 255))
-    fr = size // 2 - pad - 7
+    fr = size // 2 - pad - 10
     face_col = tuple(max(0, c - (30 if pressed else 0)) for c in face)
     soft_circle(draw, (size // 2, size // 2 + cy_off), fr, (*face_col, 255))
     soft_circle(
         draw,
         (size // 2 - fr // 3, size // 2 - fr // 2 + cy_off),
-        max(8, fr // 3),
+        max(10, fr // 3),
         (255, 255, 255, 70 if not pressed else 40),
     )
-    draw_icon(draw, name, size // 2, size // 2 + cy_off, size - 28)
+    draw_icon(draw, name, size // 2, size // 2 + cy_off, size - 40)
     return im
 
 
-def make_background(w: int = 1280, h: int = 720) -> Image.Image:
+def make_background(w: int = 720, h: int = 1280) -> Image.Image:
     im = Image.new("RGBA", (w, h))
     px = im.load()
     for y in range(h):
@@ -161,19 +216,19 @@ def make_background(w: int = 1280, h: int = 720) -> Image.Image:
             soft_circle(d, (int(cx + ox * s), int(cy + oy * s)), int(s * rr), col)
 
     m = min(w, h)
-    cloud(int(w * 0.14), int(h * 0.10), int(m * 0.12), 170)
-    cloud(int(w * 0.42), int(h * 0.07), int(m * 0.09), 150)
-    cloud(int(w * 0.78), int(h * 0.12), int(m * 0.13), 165)
-    cloud(int(w * 0.92), int(h * 0.05), int(m * 0.08), 140)
-    cloud(int(w * 0.55), int(h * 0.18), int(m * 0.07), 120)
+    cloud(int(w * 0.14), int(h * 0.08), int(m * 0.14), 175)
+    cloud(int(w * 0.55), int(h * 0.05), int(m * 0.11), 155)
+    cloud(int(w * 0.88), int(h * 0.10), int(m * 0.13), 165)
+    cloud(int(w * 0.30), int(h * 0.14), int(m * 0.08), 130)
+    cloud(int(w * 0.72), int(h * 0.16), int(m * 0.09), 140)
 
     balloons = [
-        (int(w * 0.07), int(h * 0.28), (255, 120, 150), int(m * 0.035)),
-        (int(w * 0.11), int(h * 0.38), (120, 190, 255), int(m * 0.028)),
-        (int(w * 0.05), int(h * 0.48), (255, 210, 90), int(m * 0.025)),
-        (int(w * 0.92), int(h * 0.30), (170, 230, 130), int(m * 0.032)),
-        (int(w * 0.96), int(h * 0.42), (255, 160, 200), int(m * 0.025)),
-        (int(w * 0.88), int(h * 0.52), (180, 160, 255), int(m * 0.022)),
+        (int(w * 0.06), int(h * 0.22), (255, 120, 150), int(m * 0.04)),
+        (int(w * 0.12), int(h * 0.30), (120, 190, 255), int(m * 0.032)),
+        (int(w * 0.05), int(h * 0.38), (255, 210, 90), int(m * 0.028)),
+        (int(w * 0.94), int(h * 0.24), (170, 230, 130), int(m * 0.038)),
+        (int(w * 0.97), int(h * 0.34), (255, 160, 200), int(m * 0.028)),
+        (int(w * 0.90), int(h * 0.42), (180, 160, 255), int(m * 0.026)),
     ]
     for bx, by, col, r in balloons:
         d.line([(bx, by + r), (bx + 3, by + r + int(r * 2.2))], fill=(140, 110, 120, 140), width=2)
@@ -181,10 +236,10 @@ def make_background(w: int = 1280, h: int = 720) -> Image.Image:
         soft_circle(d, (bx - r // 3, by - r // 3), max(3, r // 4), (255, 255, 255, 140))
         soft_circle(d, (bx, by + r - 1), 3, (*col, 230))
 
-    for i in range(36):
+    for i in range(48):
         x = int((i * 97 + 31) % (w - 40) + 20)
         y = int((i * 53 + 17) % (h - 40) + 20)
-        if 0.22 * w < x < 0.78 * w and 0.18 * h < y < 0.72 * h:
+        if 0.18 * w < x < 0.82 * w and 0.18 * h < y < 0.72 * h:
             continue
         cols = [
             (255, 140, 160, 140),
@@ -197,70 +252,100 @@ def make_background(w: int = 1280, h: int = 720) -> Image.Image:
 
     floor = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     fd = ImageDraw.Draw(floor, "RGBA")
-    for y in range(h - 90, h):
-        a = int(55 * (y - (h - 90)) / 90)
+    for y in range(h - 110, h):
+        a = int(60 * (y - (h - 110)) / 110)
         fd.line([(0, y), (w, y)], fill=(255, 235, 215, a))
 
     return Image.alpha_composite(Image.alpha_composite(im, layer), floor)
 
 
-def make_title_banner(w: int = 720, h: int = 160) -> Image.Image:
+def star_poly(d, cx, cy, r, col):
+    pts = []
+    for i in range(10):
+        ang = -math.pi / 2 + i * math.pi / 5
+        rr = r if i % 2 == 0 else r * 0.45
+        pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
+    d.polygon(pts, fill=col)
+
+
+def make_title_banner(w: int = 960, h: int = 260) -> Image.Image:
+    """BIG lovable cartoon title — clear Chinese + English, cute block pals."""
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     d = ImageDraw.Draw(im, "RGBA")
-    round_rect(d, [6, 24, w - 6, h - 12], 30, (255, 252, 245, 240), outline=(255, 170, 90, 230), width=5)
-    d.rounded_rectangle([18, 32, w - 18, 52], 10, fill=(255, 255, 255, 90))
-    cubes = [
-        (40, 50, (255, 110, 130)),
-        (w - 68, 50, (110, 180, 255)),
-        (50, h - 48, (255, 200, 80)),
-        (w - 78, h - 48, (130, 220, 140)),
+
+    # Soft drop shadow
+    round_rect(d, [18, 28, w - 10, h - 8], 40, (0, 0, 0, 40))
+    # Main creamy plaque
+    round_rect(d, [10, 18, w - 18, h - 18], 40, (255, 252, 245, 245), outline=(255, 160, 80, 240), width=7)
+    # Inner white gloss strip
+    d.rounded_rectangle([28, 30, w - 36, 70], 16, fill=(255, 255, 255, 100))
+    # Soft peach inner rim
+    d.rounded_rectangle([22, 26, w - 30, h - 26], 34, outline=(255, 200, 140, 120), width=3)
+
+    # Rainbow candy dots along top edge
+    rainbow = [
+        (255, 110, 130),
+        (255, 170, 80),
+        (255, 220, 80),
+        (120, 210, 130),
+        (110, 180, 255),
+        (190, 140, 240),
     ]
-    for cx, cy, col in cubes:
-        d.rounded_rectangle([cx, cy, cx + 26, cy + 26], 6, fill=(*col, 255), outline=(255, 255, 255, 200), width=2)
-        soft_circle(d, (cx + 8, cy + 9), 2, (40, 40, 55, 220))
-        soft_circle(d, (cx + 18, cy + 9), 2, (40, 40, 55, 220))
-        d.arc([cx + 7, cy + 13, cx + 19, cy + 22], 20, 160, fill=(40, 40, 55, 220), width=2)
+    for i, col in enumerate(rainbow):
+        x = 70 + i * ((w - 140) // max(1, len(rainbow) - 1))
+        soft_circle(d, (x, 28), 8, (*col, 230))
+        soft_circle(d, (x - 2, 26), 3, (255, 255, 255, 160))
 
-    def star(cx, cy, r, col):
-        pts = []
-        for i in range(10):
-            ang = -math.pi / 2 + i * math.pi / 5
-            rr = r if i % 2 == 0 else r * 0.45
-            pts.append((cx + rr * math.cos(ang), cy + rr * math.sin(ang)))
-        d.polygon(pts, fill=col)
+    # Big cute cube characters left & right
+    cube_sz = 72
+    draw_cute_cube(d, 70, h // 2 + 8, cube_sz, (255, 110, 130))
+    draw_cute_cube(d, w - 78, h // 2 + 8, cube_sz, (110, 180, 255))
+    draw_cute_cube(d, 130, h - 55, 44, (255, 200, 80))
+    draw_cute_cube(d, w - 140, h - 55, 44, (130, 220, 140))
 
-    star(110, 38, 12, (255, 210, 60, 255))
-    star(w - 120, 38, 11, (255, 210, 60, 255))
-    star(w // 2, 34, 9, (255, 230, 120, 255))
+    # Stars
+    star_poly(d, w // 2 - 180, 48, 16, (255, 210, 60, 255))
+    star_poly(d, w // 2 + 180, 48, 16, (255, 210, 60, 255))
+    star_poly(d, w // 2, 36, 12, (255, 230, 120, 255))
 
-    font_paths = [
-        "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
-        str(ROOT / "assets" / "fonts" / "NotoSansCJK-Regular.ttc"),
-        "/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf",
-    ]
-    font_big = font_small = None
-    for fp in font_paths:
-        if os.path.exists(fp):
-            try:
-                font_big = ImageFont.truetype(fp, 48 if h >= 150 else 34)
-                font_small = ImageFont.truetype(fp, 22 if h >= 150 else 16)
-                break
-            except Exception:
-                continue
-    if font_big is None:
-        font_big = font_small = ImageFont.load_default()
+    font_big = load_cjk_font(72)
+    font_sub = load_cjk_font(28)
 
     title = "彩色方塊逃脫"
     bbox = d.textbbox((0, 0), title, font=font_big)
     tw = bbox[2] - bbox[0]
     tx = (w - tw) // 2
-    ty = 50 if h >= 150 else 38
-    d.text((tx + 2, ty + 2), title, font=font_big, fill=(200, 120, 60, 150))
-    d.text((tx, ty), title, font=font_big, fill=(255, 115, 75, 255))
+    ty = 78
+    # Soft multi-layer shadow for pop
+    d.text((tx + 3, ty + 3), title, font=font_big, fill=(200, 100, 50, 100))
+    d.text((tx + 1, ty + 1), title, font=font_big, fill=(255, 180, 120, 180))
+    d.text((tx, ty), title, font=font_big, fill=(255, 105, 70, 255))
+
     sub = "Color Block Escape"
-    bbox2 = d.textbbox((0, 0), sub, font=font_small)
+    bbox2 = d.textbbox((0, 0), sub, font=font_sub)
     sw = bbox2[2] - bbox2[0]
-    d.text(((w - sw) // 2, ty + (52 if h >= 150 else 40)), sub, font=font_small, fill=(120, 100, 90, 220))
+    d.text(((w - sw) // 2, ty + 78), sub, font=font_sub, fill=(130, 105, 95, 230))
+
+    # Tiny sparkles near title
+    for sx, sy in [(tx - 20, ty + 10), (tx + tw + 16, ty + 18), (tx + tw // 2, ty - 8)]:
+        soft_circle(d, (sx, sy), 3, (255, 230, 120, 220))
+
+    return im
+
+
+def make_badge_chip(name: str, w: int = 200, h: int = 88) -> Image.Image:
+    """Colorful rounded badge chip for HUD stats."""
+    base = BADGE_COLORS.get(name, (200, 200, 210))
+    im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(im, "RGBA")
+    # shadow
+    round_rect(d, [4, 6, w - 2, h - 2], 22, (0, 0, 0, 35))
+    # body
+    round_rect(d, [2, 2, w - 4, h - 6], 22, (*base, 240), outline=(255, 255, 255, 220), width=4)
+    # soft gloss (keep chip colorful, not half-white)
+    d.rounded_rectangle([12, 8, w - 14, max(18, h // 3)], 10, fill=(255, 255, 255, 45))
+    # accent dot
+    soft_circle(d, (20, 18), 6, (255, 255, 255, 160))
     return im
 
 
@@ -297,23 +382,22 @@ def make_panel_frame(w: int = 320, h: int = 520) -> Image.Image:
     return im
 
 
-def make_hud_bar(w: int = 1280, h: int = 96) -> Image.Image:
+def make_hud_bar(w: int = 720, h: int = 200) -> Image.Image:
+    """Mostly transparent — soft fade so playroom bg shows through."""
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im, "RGBA")
-    round_rect(draw, [0, 0, w, h], 0, (255, 255, 255, 175))
-    draw.rectangle([0, h - 6, w, h], fill=(255, 180, 120, 180))
-    for i in range(12):
-        x = 40 + i * (w // 12)
-        cols = [(255, 140, 160), (140, 190, 255), (255, 210, 90), (150, 220, 140)]
-        soft_circle(draw, (x, h - 3), 3, (*cols[i % 4], 200))
+    for y in range(h):
+        a = int(40 * (1.0 - y / max(1, h - 1)))
+        draw.line([(0, y), (w, y)], fill=(255, 255, 255, a))
     return im
 
 
-def make_toolbar_bar(w: int = 1280, h: int = 88) -> Image.Image:
+def make_toolbar_bar(w: int = 720, h: int = 140) -> Image.Image:
+    """Soft pill tray behind bottom buttons — not a full-width hard bar."""
     im = Image.new("RGBA", (w, h), (0, 0, 0, 0))
     draw = ImageDraw.Draw(im, "RGBA")
-    round_rect(draw, [0, 0, w, h], 0, (255, 250, 245, 210))
-    draw.rectangle([0, 0, w, 4], fill=(255, 180, 120, 160))
+    pad_x = int(w * 0.04)
+    round_rect(draw, [pad_x, 10, w - pad_x, h - 8], 36, (255, 250, 245, 175), outline=(255, 190, 130, 140), width=3)
     return im
 
 
@@ -336,18 +420,20 @@ def make_gate_deco(color_rgb, size: int = 64) -> Image.Image:
 
 def main() -> None:
     print("Generating kids UI art →", OUT)
-    save(make_background(1280, 720), "bg_playroom.png")
     save(make_background(720, 1280), "bg_playroom_portrait.png")
-    save(make_title_banner(720, 160), "title_banner.png")
-    save(make_title_banner(480, 120), "title_banner_sm.png")
+    save(make_background(1280, 720), "bg_playroom.png")
+    save(make_title_banner(960, 260), "title_banner.png")
+    save(make_title_banner(720, 200), "title_banner_sm.png")
     for name in BTN_COLORS:
-        save(make_button(name, 128, False), f"btn_{name}.png")
-        save(make_button(name, 128, True), f"btn_{name}_pressed.png")
+        save(make_button(name, 192, False), f"btn_{name}.png")
+        save(make_button(name, 192, True), f"btn_{name}_pressed.png")
+    for name in BADGE_COLORS:
+        save(make_badge_chip(name, 220, 96), f"badge_{name}.png")
     save(make_star(True, 64), "star_on.png")
     save(make_star(False, 64), "star_off.png")
     save(make_panel_frame(320, 520), "panel_frame.png")
-    save(make_hud_bar(1280, 96), "hud_bar.png")
-    save(make_toolbar_bar(1280, 88), "toolbar_bar.png")
+    save(make_hud_bar(720, 220), "hud_bar.png")
+    save(make_toolbar_bar(720, 150), "toolbar_bar.png")
     for name, rgb in GATE_COLORS.items():
         save(make_gate_deco(rgb, 64), f"gate_{name}.png")
     print("Done.")

@@ -1,9 +1,11 @@
 extends Node2D
-## 彩色方塊逃脫 — Color Block Escape main scene (responsive + touch).
+## 彩色方塊逃脫 — Color Block Escape main scene (portrait-only kids UI).
 
 const GAP_RATIO := 0.07  # gap relative to cell
-const MIN_TOUCH := 48.0  # ≥44px touch targets
+const MIN_TOUCH := 52.0  # modal / secondary touch targets
+const BTN_SIZE := 80.0   # bottom toolbar icon diameter (72–88)
 const GATE_PAD := 26.0
+const BOTTOM_PAD := 36.0 # lift toolbar off screen bottom
 
 var font: Font
 var model: BoardModel
@@ -38,16 +40,18 @@ var toast_t: float = 0.0
 var bg_a := Color(0.93, 0.96, 1.0)
 var bg_b := Color(0.98, 0.93, 0.96)
 
-# --- Responsive layout (recomputed on resize) ---
-var vp: Vector2 = Vector2(1280, 720)
-var is_narrow: bool = false
-var cell: float = 84.0
-var gap: float = 6.0
-var board_origin: Vector2 = Vector2(340, 96)
-var hud_h: float = 64.0
-var toolbar_h: float = 0.0
+# --- Portrait layout (recomputed on resize; always portrait) ---
+var vp: Vector2 = Vector2(390, 844)
+var is_narrow: bool = true  # always portrait layout
+var cell: float = 48.0
+var gap: float = 4.0
+var board_origin: Vector2 = Vector2(40, 220)
+var hud_h: float = 200.0
+var toolbar_h: float = 130.0
+var title_rect: Rect2 = Rect2()
+var badge_rects: Dictionary = {}  # id -> Rect2
 var btn_rects: Dictionary = {}  # id -> Rect2
-var help_lines_pos: Vector2 = Vector2.ZERO
+var help_lines_pos: Vector2 = Vector2(-1, -1)
 
 # --- Kids UI art (procedural, assets/ui/) ---
 var tex_bg: Texture2D
@@ -62,6 +66,7 @@ var tex_star_off: Texture2D
 var tex_btn: Dictionary = {}  # id -> Texture2D
 var tex_btn_pressed: Dictionary = {}
 var tex_gates: Dictionary = {}  # color name -> Texture2D
+var tex_badge: Dictionary = {}  # level/time/moves/score -> Texture2D
 var pressed_btn: String = ""
 var press_flash_t: float = 0.0
 
@@ -79,6 +84,8 @@ func _load_ui_art() -> void:
 	for id in ["undo", "reset", "hint", "map", "rules"]:
 		tex_btn[id] = _tex("res://assets/ui/btn_%s.png" % id)
 		tex_btn_pressed[id] = _tex("res://assets/ui/btn_%s_pressed.png" % id)
+	for id in ["level", "time", "moves", "score"]:
+		tex_badge[id] = _tex("res://assets/ui/badge_%s.png" % id)
 	for c in ["red", "blue", "green", "yellow", "purple", "orange"]:
 		tex_gates[c] = _tex("res://assets/ui/gate_%s.png" % c)
 
@@ -120,81 +127,73 @@ func _on_viewport_resized() -> void:
 
 
 func _recompute_layout() -> void:
-	is_narrow = vp.y > vp.x * 1.05 or vp.x < 900.0
-	hud_h = 110.0 if is_narrow else 72.0
-	toolbar_h = 0.0
-	var margin := 12.0 if is_narrow else 20.0
+	# Portrait-only: always use board + bottom toolbar (even if window is wide).
+	is_narrow = true
+	var margin := 14.0
+	var top_pad := 10.0
 
-	if is_narrow:
-		toolbar_h = maxf(MIN_TOUCH + 16.0, 72.0)
-		var avail_w: float = vp.x - margin * 2.0 - GATE_PAD * 2.0
-		var avail_h: float = vp.y - hud_h - toolbar_h - margin * 2.0 - GATE_PAD * 2.0 - 8.0
-		var board_px: float = minf(avail_w, avail_h)
-		board_px = maxf(board_px, 180.0)
-		cell = board_px / (BoardModel.SIZE + (BoardModel.SIZE - 1) * GAP_RATIO)
-		gap = cell * GAP_RATIO
-		var board_span: float = BoardModel.SIZE * (cell + gap) - gap
-		board_origin = Vector2(
-			(vp.x - board_span) * 0.5,
-			hud_h + margin + GATE_PAD + (avail_h - board_span) * 0.5
-		)
-		_layout_bottom_toolbar()
-	else:
-		# Landscape / desktop: side panel on the right
-		var panel_w: float = clampf(vp.x * 0.22, 240.0, 300.0)
-		var left_w: float = vp.x - panel_w - margin * 3.0
-		var avail_h: float = vp.y - hud_h - margin * 2.0 - GATE_PAD * 2.0
-		var board_px: float = minf(left_w - GATE_PAD * 2.0, avail_h)
-		board_px = maxf(board_px, 220.0)
-		cell = board_px / (BoardModel.SIZE + (BoardModel.SIZE - 1) * GAP_RATIO)
-		gap = cell * GAP_RATIO
-		var board_span: float = BoardModel.SIZE * (cell + gap) - gap
-		board_origin = Vector2(
-			margin + GATE_PAD + (left_w - GATE_PAD * 2.0 - board_span) * 0.5,
-			hud_h + margin + GATE_PAD + (avail_h - board_span) * 0.5
-		)
-		_layout_side_panel(panel_w, margin)
+	# Big title banner (prominent in sky area)
+	var banner: Texture2D = tex_title if tex_title != null else tex_title_sm
+	var bw: float = vp.x - 12.0
+	var bh: float = 110.0
+	if banner != null:
+		bh = bw * float(banner.get_height()) / float(banner.get_width())
+		bh = clampf(bh, 100.0, 130.0)
+	title_rect = Rect2((vp.x - bw) * 0.5, top_pad, bw, bh)
+
+	# Colorful badge chips under title
+	var badge_h: float = clampf(vp.x * 0.145, 50.0, 60.0)
+	var badge_gap: float = 5.0
+	var badge_pad: float = 8.0
+	var badge_y: float = title_rect.position.y + title_rect.size.y + 4.0
+	var ids_b := ["level", "time", "moves", "score"]
+	var n_b := ids_b.size()
+	var badge_w: float = (vp.x - badge_pad * 2.0 - badge_gap * float(n_b - 1)) / float(n_b)
+	badge_w = maxf(badge_w, 70.0)
+	badge_rects.clear()
+	var bx: float = badge_pad
+	for id in ids_b:
+		badge_rects[id] = Rect2(bx, badge_y, badge_w, badge_h)
+		bx += badge_w + badge_gap
+
+	hud_h = badge_y + badge_h + 10.0
+
+	# Bottom toolbar: large buttons (72–88), lifted from edge — fill width
+	var n := 5
+	var side_m: float = 8.0
+	var gap_btn: float = 8.0
+	# Compute largest icon that fits with comfortable gaps
+	var icon: float = (vp.x - side_m * 2.0 - gap_btn * float(n - 1)) / float(n)
+	icon = clampf(icon, 72.0, 88.0)
+	# Recompute gap so buttons are evenly spaced across width
+	gap_btn = maxf(4.0, (vp.x - side_m * 2.0 - icon * float(n)) / float(maxi(n - 1, 1)))
+	toolbar_h = icon + BOTTOM_PAD + 24.0
+
+	var avail_w: float = vp.x - margin * 2.0 - GATE_PAD * 2.0
+	var avail_h: float = vp.y - hud_h - toolbar_h - margin * 2.0 - GATE_PAD * 2.0
+	var board_px: float = minf(avail_w, avail_h)
+	board_px = maxf(board_px, 160.0)
+	cell = board_px / (BoardModel.SIZE + (BoardModel.SIZE - 1) * GAP_RATIO)
+	gap = cell * GAP_RATIO
+	var board_span: float = BoardModel.SIZE * (cell + gap) - gap
+	# Sit board a bit above toolbar with modest gap (not floating mid-sky)
+	var board_y: float = hud_h + margin + GATE_PAD + maxf(0.0, (avail_h - board_span) * 0.55)
+	board_origin = Vector2((vp.x - board_span) * 0.5, board_y)
+	_layout_bottom_toolbar(icon, gap_btn)
+	help_lines_pos = Vector2(-1, -1)
 
 
-func _layout_bottom_toolbar() -> void:
+func _layout_bottom_toolbar(icon: float = BTN_SIZE, gap_btn: float = 8.0) -> void:
 	btn_rects.clear()
 	var labels := ["undo", "reset", "hint", "map", "rules"]
 	var n := labels.size()
-	var pad := 10.0
-	var bar_y: float = vp.y - toolbar_h + 6.0
-	var bar_h: float = toolbar_h - 12.0
-	var icon: float = minf(bar_h, maxf(MIN_TOUCH, 56.0))
-	icon = minf(icon, (vp.x - pad * (n + 1)) / float(n))
-	var total_w: float = n * icon + pad * (n + 1)
-	var x: float = (vp.x - total_w) * 0.5 + pad
-	var y: float = bar_y + (bar_h - icon) * 0.5
+	var total_w: float = n * icon + gap_btn * float(n - 1)
+	var x: float = (vp.x - total_w) * 0.5
+	# Lift buttons: bottom of icon sits BOTTOM_PAD above screen bottom
+	var y: float = vp.y - BOTTOM_PAD - icon
 	for id in labels:
 		btn_rects[id] = Rect2(x, y, icon, icon)
-		x += icon + pad
-	help_lines_pos = Vector2(-1, -1)  # hidden on narrow
-
-
-func _layout_side_panel(panel_w: float, margin: float) -> void:
-	btn_rects.clear()
-	var px: float = vp.x - panel_w - margin
-	var py: float = hud_h + margin + 8.0
-	# Title banner on top; icon buttons in two columns (round glossy)
-	var icon: float = clampf(panel_w * 0.34, MIN_TOUCH, 68.0)
-	var gap_x: float = 12.0
-	var gap_y: float = 28.0  # room for zh caption under icon
-	var start_y: float = py + 130.0
-	var ids := ["undo", "reset", "hint", "map", "rules"]
-	var row_w: float = icon * 2.0 + gap_x
-	var left0: float = px + (panel_w - row_w) * 0.5
-	for i in ids.size():
-		var col_i := i % 2
-		var row_i := i / 2
-		# Last (rules) centered if odd count on its row
-		var x: float = left0 + col_i * (icon + gap_x)
-		if i == ids.size() - 1 and ids.size() % 2 == 1:
-			x = px + (panel_w - icon) * 0.5
-		btn_rects[ids[i]] = Rect2(x, start_y + row_i * (icon + gap_y), icon, icon)
-	help_lines_pos = Vector2(px + 12.0, py + 4.0)
+		x += icon + gap_btn
 
 
 func _load_progress() -> void:
@@ -301,7 +300,8 @@ func _draw() -> void:
 
 
 func _draw_background() -> void:
-	var bg: Texture2D = tex_bg_portrait if is_narrow and tex_bg_portrait != null else tex_bg
+	# Full-bleed playroom background (portrait art preferred).
+	var bg: Texture2D = tex_bg_portrait if tex_bg_portrait != null else tex_bg
 	if bg != null:
 		draw_texture_rect(bg, Rect2(Vector2.ZERO, vp), false)
 	else:
@@ -317,51 +317,58 @@ func _draw_text(pos: Vector2, text: String, size: int, col: Color, outline: bool
 
 
 func _draw_hud() -> void:
+	# Soft fade only — keep playroom bg visible (no solid white bar).
 	if tex_hud != null:
 		draw_texture_rect(tex_hud, Rect2(0, 0, vp.x, hud_h), false)
+
+	# Big cartoon title banner (prominent)
+	var banner: Texture2D = tex_title if tex_title != null else tex_title_sm
+	if banner != null and title_rect.size.x > 1.0:
+		draw_texture_rect(banner, title_rect, false)
 	else:
-		draw_rect(Rect2(0, 0, vp.x, hud_h), Color(1, 1, 1, 0.78))
-		draw_rect(Rect2(0, hud_h - 2, vp.x, 2), Color(0.7, 0.75, 0.85, 0.5))
+		_draw_text(Vector2(vp.x * 0.18, 48), "彩色方塊逃脫", 28, Color(1.0, 0.42, 0.28), true)
+
+	# Colorful cute badge chips: level / time / moves / score
 	var gold: float = float(level_data.get("gold", 60))
 	var sc: Dictionary = BoardModel.compute_score(model.moves, int(level_data.get("par", 5)), elapsed, gold, model.combo_bonus)
 	var mm := int(elapsed) / 60
 	var ss := int(elapsed) % 60
-	var tcol := Color(0.2, 0.55, 0.35) if elapsed <= gold else Color(0.85, 0.4, 0.2)
-	var lv := "關卡 %d/%d  %s" % [level_index + 1, LevelData.level_count(), str(level_data.get("title", ""))]
-
-	if is_narrow:
-		var banner: Texture2D = tex_title_sm if tex_title_sm != null else tex_title
-		var banner_bottom := 36.0
-		if banner != null:
-			var bw: float = minf(vp.x - 24.0, 340.0)
-			var bh: float = bw * float(banner.get_height()) / float(banner.get_width())
-			bh = minf(bh, 70.0)
-			draw_texture_rect(banner, Rect2((vp.x - bw) * 0.5, 0.0, bw, bh), false)
-			banner_bottom = bh - 4.0
+	var time_ok: bool = elapsed <= gold
+	var items := [
+		{"id": "level", "label": "關卡", "value": "%d/%d" % [level_index + 1, LevelData.level_count()], "lab": Color(0.45, 0.1, 0.28), "fg": Color(0.35, 0.05, 0.2)},
+		{"id": "time", "label": "時間", "value": "%02d:%02d" % [mm, ss], "lab": Color(0.05, 0.35, 0.28), "fg": Color(0.05, 0.32, 0.25) if time_ok else Color(0.7, 0.12, 0.08)},
+		{"id": "moves", "label": "步數", "value": "%d/%d" % [model.moves, int(level_data.get("par", 5))], "lab": Color(0.45, 0.22, 0.02), "fg": Color(0.4, 0.18, 0.0)},
+		{"id": "score", "label": "分數", "value": "%d" % int(sc.total), "lab": Color(0.4, 0.28, 0.0), "fg": Color(0.35, 0.22, 0.0)},
+	]
+	for it in items:
+		var id: String = str(it.id)
+		if not badge_rects.has(id):
+			continue
+		var r: Rect2 = badge_rects[id]
+		var tex: Texture2D = tex_badge.get(id) as Texture2D
+		if tex != null:
+			draw_texture_rect(tex, r, false)
 		else:
-			_draw_text(Vector2(14, 28), "彩色方塊逃脫", 20, Color(0.25, 0.3, 0.45), true)
-		_draw_text(Vector2(12, banner_bottom + 18.0), lv, 13, Color(0.35, 0.4, 0.55))
-		_draw_text(Vector2(12, banner_bottom + 36.0), "⏱ %02d:%02d   步 %d/%d   分 %d" % [
-			mm, ss, model.moves, int(level_data.get("par", 5)), int(sc.total)
-		], 13, tcol)
-		if model.combo_bonus > 0:
-			_draw_text(Vector2(vp.x - 100, banner_bottom + 36.0), "連擊 +%d" % model.combo_bonus, 12, Color(0.9, 0.45, 0.2))
-	else:
-		var banner2: Texture2D = tex_title
-		if banner2 != null:
-			var bw2: float = minf(340.0, vp.x * 0.32)
-			var bh2: float = bw2 * float(banner2.get_height()) / float(banner2.get_width())
-			bh2 = minf(bh2, hud_h - 4.0)
-			draw_texture_rect(banner2, Rect2(8.0, (hud_h - bh2) * 0.5, bw2, bh2), false)
-		else:
-			_draw_text(Vector2(24, 42), "彩色方塊逃脫", 28, Color(0.25, 0.3, 0.45), true)
-		_draw_text(Vector2(minf(360, vp.x * 0.30), 40), lv, 18, Color(0.3, 0.35, 0.5))
-		var rx: float = vp.x - 360
-		_draw_text(Vector2(rx, 28), "時間 %02d:%02d" % [mm, ss], 18, tcol)
-		_draw_text(Vector2(rx, 50), "分數 %d" % int(sc.total), 18, Color(0.35, 0.35, 0.55))
-		_draw_text(Vector2(rx + 150, 28), "步數 %d / %d" % [model.moves, int(level_data.get("par", 5))], 18, Color(0.35, 0.4, 0.55))
-		if model.combo_bonus > 0:
-			_draw_text(Vector2(rx + 150, 50), "連擊 +%d" % model.combo_bonus, 16, Color(0.9, 0.45, 0.2))
+			var fallback := {
+				"level": Color(1.0, 0.55, 0.67),
+				"time": Color(0.35, 0.78, 0.67),
+				"moves": Color(1.0, 0.67, 0.35),
+				"score": Color(1.0, 0.82, 0.28),
+			}
+			_round_rect(r, 14, fallback.get(id, Color(0.9, 0.9, 0.95)))
+			draw_rect(r, Color(1, 1, 1, 0.55), false, 2.0)
+		var lab: String = str(it.label)
+		var val: String = str(it.value)
+		var lab_col: Color = it.lab
+		var fg: Color = it.fg
+		var fs_lab := int(clampf(r.size.y * 0.30, 11.0, 14.0))
+		var fs_val := int(clampf(r.size.y * 0.48, 16.0, 22.0))
+		var lab_sz := font.get_string_size(lab, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_lab)
+		var val_sz := font.get_string_size(val, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_val)
+		_draw_text(Vector2(r.position.x + (r.size.x - lab_sz.x) * 0.5, r.position.y + r.size.y * 0.36), lab, fs_lab, lab_col, true)
+		_draw_text(Vector2(r.position.x + (r.size.x - val_sz.x) * 0.5, r.position.y + r.size.y * 0.82), val, fs_val, fg, true)
+	if model.combo_bonus > 0:
+		_draw_text(Vector2(vp.x - 90, hud_h - 4), "連擊 +%d" % model.combo_bonus, 13, Color(0.95, 0.4, 0.15), true)
 
 
 func _draw_board() -> void:
@@ -507,47 +514,14 @@ func _draw_exit_anims() -> void:
 
 
 func _draw_controls() -> void:
-	if is_narrow:
-		if tex_toolbar != null:
-			draw_texture_rect(tex_toolbar, Rect2(0, vp.y - toolbar_h, vp.x, toolbar_h), false)
-		else:
-			draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, toolbar_h), Color(1, 1, 1, 0.88))
-			draw_rect(Rect2(0, vp.y - toolbar_h, vp.x, 2), Color(0.7, 0.75, 0.85, 0.45))
-		for id in btn_rects.keys():
-			_draw_icon_button(str(id), btn_rects[id])
+	# Soft pill tray behind large bottom buttons (bg still shows through edges).
+	var tray_top: float = vp.y - toolbar_h
+	if tex_toolbar != null:
+		draw_texture_rect(tex_toolbar, Rect2(0, tray_top, vp.x, toolbar_h), false)
 	else:
-		var panel := _side_panel_rect()
-		if tex_panel != null:
-			draw_texture_rect(tex_panel, panel, false)
-		else:
-			_round_rect(panel, 18, Color(1, 1, 1, 0.78))
-		if help_lines_pos.x >= 0:
-			var p := help_lines_pos
-			# Mini title banner inside panel
-			var tb: Texture2D = tex_title_sm if tex_title_sm != null else tex_title
-			if tb != null:
-				var tw: float = minf(panel.size.x - 24.0, 260.0)
-				var th: float = tw * float(tb.get_height()) / float(tb.get_width())
-				draw_texture_rect(tb, Rect2(panel.position.x + (panel.size.x - tw) * 0.5, p.y, tw, th), false)
-			else:
-				_draw_text(p + Vector2(4, 20), "操作", 24, Color(0.3, 0.35, 0.5))
-		var zh_labels := {
-			"undo": "復原",
-			"reset": "重來",
-			"hint": "提示",
-			"map": "地圖",
-			"rules": "規則",
-		}
-		for id in btn_rects.keys():
-			var r: Rect2 = btn_rects[id]
-			_draw_icon_button(str(id), r)
-			# Tiny Traditional Chinese caption under icon
-			var cap: String = str(zh_labels.get(id, ""))
-			var fs := 13
-			var approx := cap.length() * fs * 0.9
-			_draw_text(Vector2(r.position.x + (r.size.x - approx) * 0.5, r.position.y + r.size.y + 14), cap, fs, Color(0.4, 0.35, 0.45))
-		var note_y: float = vp.y - 36.0
-		_draw_text(Vector2(panel.position.x + 20, note_y), "灰色石頭不會離開", 13, Color(0.5, 0.55, 0.6))
+		_round_rect(Rect2(12, tray_top + 8, vp.x - 24, toolbar_h - 16), 28, Color(1, 0.98, 0.96, 0.72))
+	for id in btn_rects.keys():
+		_draw_icon_button(str(id), btn_rects[id])
 
 
 func _draw_icon_button(id: String, r: Rect2) -> void:
