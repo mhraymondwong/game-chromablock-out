@@ -1,5 +1,5 @@
 extends SceneTree
-## Headless smoke: validate all levels + exercise exit logic (incl. horizontal bar).
+## Headless smoke: validate all levels + exit logic (bars, vertical, flush swipe).
 
 func _initialize() -> void:
 	call_deferred("_run")
@@ -59,10 +59,8 @@ func _run() -> void:
 		printerr("FAIL L2 missing pieces")
 		err_count += 1
 	else:
-		# Move 1x1 onto gate row then out of the way / exit first
 		var mono: Dictionary = m.get_block(mono_id)
 		m.push_history()
-		# Slide mono to gate row (y=2) then to right edge
 		var gate_y := 2
 		m.try_move(mono_id, 0, gate_y - int(mono.y))
 		mono = m.get_block(mono_id)
@@ -75,7 +73,6 @@ func _run() -> void:
 			err_count += 1
 		else:
 			print("OK L2 1x1 exit")
-		# Now horizontal bar → right edge on gate row
 		var bar: Dictionary = m.get_block(bar_id)
 		if bar.is_empty():
 			printerr("FAIL L2 bar missing after mono exit")
@@ -83,7 +80,6 @@ func _run() -> void:
 		else:
 			m.try_move(bar_id, 0, gate_y - int(bar.y))
 			bar = m.get_block(bar_id)
-			# 1x2 origin must land at SIZE-2 so rightmost cell is SIZE-1
 			var target_x := BoardModel.SIZE - 2
 			m.try_move(bar_id, target_x - int(bar.x), 0)
 			bar = m.get_block(bar_id)
@@ -99,6 +95,85 @@ func _run() -> void:
 				err_count += 1
 			else:
 				print("OK L2 1x2 exit + clear")
+
+	# --- Synthetic: vertical 1x2 (shape 2x1) exits right through size-2 gate ---
+	m.load_level({
+		"gates": [{"side": "right", "start": 3, "size": 2, "color": "yellow"}],
+		"blocks": [{"shape": "2x1", "color": "yellow", "x": 6, "y": 3}],
+	})
+	var vid := 0
+	m.try_move(vid, 1, 0)  # flush at x=7
+	if m.can_exit(vid, Vector2i(1, 0)).is_empty():
+		printerr("FAIL synth vertical 2x1 cannot exit right")
+		err_count += 1
+	elif not m.try_exit(vid, Vector2i(1, 0), 1.0):
+		printerr("FAIL synth vertical 2x1 try_exit")
+		err_count += 1
+	else:
+		print("OK synth vertical 2x1 exit right")
+
+	# Gate too small must refuse
+	m.load_level({
+		"gates": [{"side": "right", "start": 3, "size": 1, "color": "yellow"}],
+		"blocks": [{"shape": "2x1", "color": "yellow", "x": 7, "y": 3}],
+	})
+	if not m.can_exit(0, Vector2i(1, 0)).is_empty():
+		printerr("FAIL synth size-1 gate should block vertical 2x1")
+		err_count += 1
+	else:
+		print("OK synth size-1 gate blocks vertical 2x1")
+
+	# --- Synthetic: horizontal 1x2 exits bottom through size-2 gate ---
+	m.load_level({
+		"gates": [{"side": "bottom", "start": 2, "size": 2, "color": "blue"}],
+		"blocks": [{"shape": "1x2", "color": "blue", "x": 2, "y": 7}],
+	})
+	if m.can_exit(0, Vector2i(0, 1)).is_empty():
+		printerr("FAIL synth horizontal 1x2 cannot exit bottom")
+		err_count += 1
+	elif not m.try_exit(0, Vector2i(0, 1), 1.0):
+		printerr("FAIL synth horizontal 1x2 try_exit bottom")
+		err_count += 1
+	else:
+		print("OK synth horizontal 1x2 exit bottom")
+
+	# --- Flush piece: try_exit works without further move ---
+	m.load_level({
+		"gates": [{"side": "right", "start": 4, "size": 2, "color": "yellow"}],
+		"blocks": [{"shape": "2x1", "color": "yellow", "x": 7, "y": 4}],
+	})
+	if m.can_exit(0, Vector2i(1, 0)).is_empty():
+		printerr("FAIL flush vertical cannot can_exit")
+		err_count += 1
+	elif not m.try_exit(0, Vector2i(1, 0), 4.0):
+		printerr("FAIL flush vertical try_exit")
+		err_count += 1
+	else:
+		print("OK flush vertical exits on directed try_exit")
+
+	# --- Level 4: yellow 2x1 at right edge must exit ---
+	m.load_level(LevelData.get_level(3))
+	var yid := -1
+	for b in m.blocks:
+		if str(b.shape) == "2x1" and str(b.color) == "yellow":
+			yid = int(b.id)
+			break
+	if yid < 0:
+		printerr("FAIL L4 missing yellow 2x1")
+		err_count += 1
+	else:
+		var yb: Dictionary = m.get_block(yid)
+		m.try_move(yid, BoardModel.SIZE - 1 - int(yb.x), 0)
+		yb = m.get_block(yid)
+		print("L4 yellow at (", yb.x, ",", yb.y, ") cells=", yb.cells)
+		if m.can_exit(yid, Vector2i(1, 0)).is_empty():
+			printerr("FAIL L4 yellow 2x1 stuck at gate (gate too small?)")
+			err_count += 1
+		elif not m.try_exit(yid, Vector2i(1, 0), 5.0):
+			printerr("FAIL L4 yellow try_exit")
+			err_count += 1
+		else:
+			print("OK L4 yellow 2x1 exit")
 
 	var sc: Dictionary = BoardModel.compute_score(1, 3, 5.0, 25.0, 0)
 	if int(sc.total) < 85:

@@ -1157,6 +1157,24 @@ func _pointer_drag(pos: Vector2) -> void:
 				gesture_counted = true
 			drag_moved = true
 			_try_auto_exit(selected_id)
+		else:
+			# Already flush with the rim: one more swipe toward the gate exits
+			# (matches keyboard path when try_move fails).
+			var edir := Vector2i.ZERO
+			if absi(want.x) >= absi(want.y):
+				edir = Vector2i(signi(want.x), 0)
+			else:
+				edir = Vector2i(0, signi(want.y))
+			if edir != Vector2i.ZERO and not model.can_exit(selected_id, edir).is_empty():
+				if not gesture_counted:
+					model.moves += 1
+					gesture_counted = true
+				drag_moved = true
+				if model.try_exit(selected_id, edir, elapsed):
+					_on_exit_visual(selected_id, edir)
+					selected_id = -1
+					dragging = false
+					_check_clear()
 	queue_redraw()
 
 

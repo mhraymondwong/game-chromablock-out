@@ -115,7 +115,7 @@ static func all_levels() -> Array:
 			"gold": 50,
 			"gates": [
 				{"side": "left", "start": 3, "size": 1, "color": "green"},
-				{"side": "right", "start": 5, "size": 1, "color": "yellow"},
+				{"side": "right", "start": 4, "size": 2, "color": "yellow"},
 			],
 			"blocks": [
 				{"shape": "stone_1", "color": "stone", "x": 3, "y": 4},
@@ -166,7 +166,7 @@ static func all_levels() -> Array:
 			"gold": 75,
 			"gates": [
 				{"side": "left", "start": 1, "size": 2, "color": "green"},
-				{"side": "right", "start": 4, "size": 1, "color": "yellow"},
+				{"side": "right", "start": 4, "size": 2, "color": "yellow"},
 				{"side": "bottom", "start": 2, "size": 1, "color": "purple"},
 			],
 			"blocks": [
@@ -184,7 +184,7 @@ static func all_levels() -> Array:
 			"par": 16,
 			"gold": 90,
 			"gates": [
-				{"side": "top", "start": 3, "size": 1, "color": "blue"},
+				{"side": "top", "start": 3, "size": 2, "color": "blue"},
 				{"side": "right", "start": 5, "size": 2, "color": "orange"},
 				{"side": "left", "start": 4, "size": 1, "color": "red"},
 			],

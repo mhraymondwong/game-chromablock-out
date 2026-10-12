@@ -392,7 +392,15 @@ func try_probe_move(id: int, dx: int, dy: int) -> bool:
 	return can_place(blk, int(blk.x) + dx, int(blk.y) + dy)
 
 
-## Validate level layout: no overlaps, in bounds.
+## Perpendicular span a piece needs to exit through a gate on `side`.
+static func exit_span_needed(shape: String, side: String) -> int:
+	var sz: Vector2i = LevelData.shape_size(shape)
+	if side in ["left", "right"]:
+		return sz.y
+	return sz.x
+
+
+## Validate level layout: no overlaps, in bounds, every color has a large enough gate.
 static func validate_level(data: Dictionary) -> String:
 	var occ: Dictionary = {}
 	for b in data.get("blocks", []):
@@ -411,4 +419,23 @@ static func validate_level(data: Dictionary) -> String:
 		var size: int = int(g.get("size", 1))
 		if start < 0 or start + size > SIZE:
 			return "bad gate %s" % str(g)
+	# Every non-stone piece needs a matching-color gate big enough for its span
+	for b in data.get("blocks", []):
+		var shape: String = str(b.get("shape", "1x1"))
+		if LevelData.is_stone(shape):
+			continue
+		var color: String = str(b.get("color", ""))
+		var ok := false
+		var need_min := 999
+		for g in data.get("gates", []):
+			if str(g.get("color", "")) != color:
+				continue
+			var side: String = str(g.get("side", ""))
+			var need: int = exit_span_needed(shape, side)
+			need_min = mini(need_min, need)
+			if int(g.get("size", 1)) >= need:
+				ok = true
+				break
+		if not ok:
+			return "no gate large enough for %s %s (need ≥%s)" % [color, shape, str(need_min if need_min < 999 else "?")]
 	return ""
