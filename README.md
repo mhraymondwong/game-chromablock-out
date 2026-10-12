@@ -14,7 +14,9 @@
 
 ## 美術（兒童風格 UI）
 
-原創程序生成圖組（`tools/gen_ui_art.py` → `assets/ui/`）：粉彩玩具房背景、大標題橫幅、彩色 HUD 徽章、大圓形圖示按鈕（復原／重來／提示／地圖／規則）、星星。介面以圖示為主，必要處保留繁中說明（規則彈窗等）。
+- **開始畫面**：Raymond 繪製的開場圖 `assets/ui/start_page.png`（全螢幕 cover）；點橙色 **PLAY**（或畫面下半）進入規則說明，再按「開始遊戲！」進入關卡。
+- **標題 Logo**：自開場圖裁出的 `assets/ui/logo.png`，用作遊戲內頂部標題（取代舊的程序生成 title_banner）。
+- 其餘程序生成圖組（`tools/gen_ui_art.py` → `assets/ui/`）：粉彩玩具房背景、彩色 HUD 徽章、大圓形圖示按鈕、星星。介面以圖示為主，必要處保留繁中說明。
 
 ```bash
 python3 tools/gen_ui_art.py

@@ -26,7 +26,8 @@ var last_pointer_ms: int = 0
 
 var elapsed: float = 0.0
 var running: bool = false
-var show_rules: bool = true
+var show_start: bool = true
+var show_rules: bool = false
 var show_clear: bool = false
 var show_map: bool = false
 var show_fail: bool = false
@@ -56,8 +57,11 @@ var help_lines_pos: Vector2 = Vector2(-1, -1)
 # --- Kids UI art (procedural, assets/ui/) ---
 var tex_bg: Texture2D
 var tex_bg_portrait: Texture2D
+var tex_start: Texture2D
+var tex_logo: Texture2D
 var tex_title: Texture2D
 var tex_title_sm: Texture2D
+var play_hit_rect: Rect2 = Rect2()
 var tex_hud: Texture2D
 var tex_toolbar: Texture2D
 var tex_panel: Texture2D
@@ -74,6 +78,8 @@ var press_flash_t: float = 0.0
 func _load_ui_art() -> void:
 	tex_bg = _tex("res://assets/ui/bg_playroom.png")
 	tex_bg_portrait = _tex("res://assets/ui/bg_playroom_portrait.png")
+	tex_start = _tex("res://assets/ui/start_page.png")
+	tex_logo = _tex("res://assets/ui/logo.png")
 	tex_title = _tex("res://assets/ui/title_banner.png")
 	tex_title_sm = _tex("res://assets/ui/title_banner_sm.png")
 	tex_hud = _tex("res://assets/ui/hud_bar.png")
@@ -114,7 +120,8 @@ func _ready() -> void:
 	get_viewport().size_changed.connect(_on_viewport_resized)
 	_on_viewport_resized()
 	_start_level(0)
-	show_rules = true
+	show_start = true
+	show_rules = false
 	running = false
 
 
@@ -132,14 +139,18 @@ func _recompute_layout() -> void:
 	var margin := 14.0
 	var top_pad := 10.0
 
-	# Big title banner (prominent in sky area)
-	var banner: Texture2D = tex_title if tex_title != null else tex_title_sm
-	var bw: float = vp.x - 12.0
-	var bh: float = 110.0
+	# Raymond logo as big header title (clear & large)
+	var banner: Texture2D = tex_logo if tex_logo != null else (tex_title if tex_title != null else tex_title_sm)
+	var bw: float = vp.x - 8.0
+	var bh: float = 140.0
 	if banner != null:
 		bh = bw * float(banner.get_height()) / float(banner.get_width())
-		bh = clampf(bh, 100.0, 130.0)
+		bh = clampf(bh, 120.0, 168.0)
 	title_rect = Rect2((vp.x - bw) * 0.5, top_pad, bw, bh)
+	# PLAY hit zone on start screen (matches orange button + hand pad)
+	var pw: float = vp.x * 0.62
+	var ph: float = clampf(vp.y * 0.10, 72.0, 100.0)
+	play_hit_rect = Rect2((vp.x - pw) * 0.5, vp.y * 0.84, pw, ph)
 
 	# Colorful badge chips under title
 	var badge_h: float = clampf(vp.x * 0.145, 50.0, 60.0)
@@ -219,7 +230,7 @@ func _start_level(idx: int) -> void:
 	dragging = false
 	active_touch_index = -1
 	elapsed = 0.0
-	running = not show_rules and not show_map
+	running = not show_start and not show_rules and not show_map
 	show_clear = false
 	show_fail = false
 	clear_result = {}
@@ -229,7 +240,7 @@ func _start_level(idx: int) -> void:
 
 
 func _process(delta: float) -> void:
-	if running and not show_clear and not show_fail and not show_rules and not show_map:
+	if running and not show_start and not show_clear and not show_fail and not show_rules and not show_map:
 		elapsed += delta
 		var gold: float = float(level_data.get("gold", 60))
 		var sc: Dictionary = BoardModel.compute_score(model.moves, int(level_data.get("par", 5)), elapsed, gold, model.combo_bonus)
@@ -278,6 +289,9 @@ func _cell_at(pos: Vector2) -> Vector2i:
 
 
 func _draw() -> void:
+	if show_start:
+		_draw_start_screen()
+		return
 	_draw_background()
 	_draw_hud()
 	_draw_board()
@@ -297,6 +311,28 @@ func _draw() -> void:
 
 	if toast_t > 0.0:
 		_draw_toast()
+
+
+func _draw_start_screen() -> void:
+	# Full-bleed cover of Raymond's start-page art (no stretch distortion).
+	if tex_start != null:
+		var tw := float(tex_start.get_width())
+		var th := float(tex_start.get_height())
+		var scale: float = maxf(vp.x / tw, vp.y / th)
+		var dw := tw * scale
+		var dh := th * scale
+		var ox := (vp.x - dw) * 0.5
+		var oy := (vp.y - dh) * 0.5
+		draw_texture_rect(tex_start, Rect2(ox, oy, dw, dh), false)
+	else:
+		_draw_background()
+		_draw_text(Vector2(vp.x * 0.22, vp.y * 0.4), "彩色方塊逃脫", 28, Color(1.0, 0.42, 0.28), true)
+	# Invisible generous hit zone over PLAY + hand (kids-friendly).
+	# Optional soft pulse ring so the tap target is obvious without covering art.
+	var r := play_hit_rect
+	if r.size.x > 1.0:
+		var pulse: float = 0.12 + 0.08 * abs(sin(Time.get_ticks_msec() * 0.004))
+		draw_rect(r.grow(6.0), Color(1, 1, 1, pulse), false, 3.0)
 
 
 func _draw_background() -> void:
@@ -321,8 +357,8 @@ func _draw_hud() -> void:
 	if tex_hud != null:
 		draw_texture_rect(tex_hud, Rect2(0, 0, vp.x, hud_h), false)
 
-	# Big cartoon title banner (prominent)
-	var banner: Texture2D = tex_title if tex_title != null else tex_title_sm
+	# Raymond bubble logo as header (large & clear)
+	var banner: Texture2D = tex_logo if tex_logo != null else (tex_title if tex_title != null else tex_title_sm)
 	if banner != null and title_rect.size.x > 1.0:
 		draw_texture_rect(banner, title_rect, false)
 	else:
@@ -779,6 +815,10 @@ func _show_toast(msg: String) -> void:
 func _input(event: InputEvent) -> void:
 	# Keyboard always
 	if event is InputEventKey and event.pressed and not event.echo:
+		if show_start:
+			if event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE]:
+				_leave_start_screen()
+			return
 		if show_rules:
 			if event.keycode in [KEY_ENTER, KEY_KP_ENTER, KEY_SPACE, KEY_ESCAPE]:
 				show_rules = false
@@ -849,6 +889,11 @@ func _input(event: InputEvent) -> void:
 
 
 func _pointer_down(pos: Vector2) -> void:
+	if show_start:
+		# Tap PLAY button / hand area, or anywhere on lower half as fallback
+		if play_hit_rect.has_point(pos) or pos.y > vp.y * 0.72:
+			_leave_start_screen()
+		return
 	if show_rules:
 		var modal := _modal_rect(0.7, 0.82)
 		if modal.has_point(pos) or _rules_start_rect().has_point(pos):
@@ -1027,6 +1072,13 @@ func _do_hint() -> void:
 	else:
 		selected_id = int(hint_flash.id)
 		_show_toast("試試這塊方塊！")
+	queue_redraw()
+
+
+func _leave_start_screen() -> void:
+	show_start = false
+	show_rules = true
+	running = false
 	queue_redraw()
 
 
