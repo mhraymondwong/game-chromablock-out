@@ -705,46 +705,70 @@ func _draw_modal_rules() -> void:
 		"⑥ 步數少、時間快 → 星星越多！",
 		"⑦ 連續逃脫可拿連擊加分喔～",
 	]
+	# Reserve bottom for checkbox + start so rules text never covers controls
+	var cb := _rules_checkbox_rect()
+	var br := _rules_start_rect()
+	var text_bottom := cb.position.y - 10.0
 	var fs := 15 if is_narrow else 18
-	var y := 108.0
-	var step := 30.0 if is_narrow else 36.0
+	var y0 := 108.0
+	var avail := maxf(120.0, text_bottom - (r.position.y + y0))
+	var step := minf(36.0 if not is_narrow else 30.0, avail / float(maxi(lines.size(), 1)))
+	step = maxf(22.0, step)
 	var colors := [
 		Color(0.95, 0.35, 0.4), Color(0.95, 0.55, 0.15), Color(0.2, 0.55, 0.9),
 		Color(0.25, 0.65, 0.35), Color(0.55, 0.4, 0.85), Color(0.9, 0.5, 0.2), Color(0.35, 0.45, 0.6),
 	]
 	for i in lines.size():
-		_draw_text(r.position + Vector2(28, y), str(lines[i]), fs, colors[i % colors.size()], true)
-		y += step
+		_draw_text(r.position + Vector2(28, y0 + step * float(i)), str(lines[i]), fs, colors[i % colors.size()], true)
 
-	# Checkbox: 下次不要再顯示
-	var cb := _rules_checkbox_rect()
+	# Checkbox: 下次不要再顯示 (large touch target; label is part of hit rect)
 	var ctex: Texture2D = tex_check_on if skip_rules_howto and tex_check_on != null else tex_check_off
 	if ctex != null:
 		draw_texture_rect(ctex, cb, false)
 	else:
-		_round_rect(cb, 8, Color(1, 1, 1))
-		draw_rect(cb, Color(0.4, 0.6, 0.9), false, 2.0)
+		_round_rect(cb, 10, Color(1, 1, 1))
+		draw_rect(cb, Color(0.35, 0.55, 0.95), false, 3.0)
 		if skip_rules_howto:
-			_draw_text(cb.position + Vector2(8, 28), "✓", 22, Color(0.2, 0.7, 0.35))
-	_draw_text(Vector2(cb.position.x + cb.size.x + 10, cb.position.y + cb.size.y * 0.72), "下次不要再顯示", 16, Color(0.4, 0.45, 0.55), true)
+			_draw_text(cb.position + Vector2(cb.size.x * 0.22, cb.size.y * 0.72), "✓", int(cb.size.y * 0.55), Color(0.2, 0.7, 0.35))
+	var lab := "下次不要再顯示"
+	var lab_fs := 17 if is_narrow else 18
+	_draw_text(Vector2(cb.position.x + cb.size.x + 12, cb.position.y + cb.size.y * 0.70), lab, lab_fs, Color(0.35, 0.4, 0.5), true)
 
 	# Big green start button
-	var br := _rules_start_rect()
 	_draw_fun_button(br, "開始遊戲！", Color(0.4, 0.85, 0.5), tex_fun_green)
 
 
 func _rules_checkbox_rect() -> Rect2:
+	## Visual checkbox square (also used as the left part of the hit target).
 	var r := _modal_rect(0.92, 0.86)
-	var side := 40.0
+	var side := maxf(MIN_TOUCH, 52.0)
 	var start := _rules_start_rect()
-	return Rect2(r.position.x + 28, start.position.y - side - 18, side, side)
+	return Rect2(r.position.x + 24, start.position.y - side - 16, side, side)
+
+
+func _rules_checkbox_hit_rect() -> Rect2:
+	## Full tap target: checkbox + label strip (kids / fat-finger friendly).
+	var r := _modal_rect(0.92, 0.86)
+	var cb := _rules_checkbox_rect()
+	var start := _rules_start_rect()
+	# Stay clear of the start button vertically; stretch across most of the modal width
+	var w := minf(r.size.x - 48.0, start.position.x - cb.position.x - 8.0)
+	if w < cb.size.x + 80.0:
+		# Narrow overlap case: still cover label area above the button
+		w = minf(r.size.x - 48.0, cb.size.x + 200.0)
+	var h := maxf(cb.size.y + 12.0, MIN_TOUCH + 8.0)
+	var y := cb.position.y + (cb.size.y - h) * 0.5
+	# Never overlap the start button
+	if y + h > start.position.y - 4.0:
+		h = maxf(MIN_TOUCH, start.position.y - 4.0 - y)
+	return Rect2(cb.position.x - 4.0, y, w, h)
 
 
 func _rules_start_rect() -> Rect2:
 	var r := _modal_rect(0.92, 0.86)
 	var bw := minf(320.0, r.size.x - 48.0)
 	var bh := maxf(MIN_TOUCH + 8.0, 60.0)
-	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 28, bw, bh)
+	return Rect2(r.position.x + (r.size.x - bw) * 0.5, r.position.y + r.size.y - bh - 24, bw, bh)
 
 
 func _draw_fun_button(r: Rect2, label: String, col: Color, tex: Texture2D = null) -> void:
@@ -1024,7 +1048,7 @@ func _pointer_down(pos: Vector2) -> void:
 			_leave_start_screen()
 		return
 	if show_rules:
-		if _rules_checkbox_rect().has_point(pos):
+		if _rules_checkbox_hit_rect().has_point(pos):
 			skip_rules_howto = not skip_rules_howto
 			_save_progress()
 			queue_redraw()

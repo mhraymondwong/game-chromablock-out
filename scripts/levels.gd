@@ -1,6 +1,7 @@
 extends RefCounted
 class_name LevelData
 ## Original Color Block Escape levels — not copied from any commercial title.
+## Board is 8×8 (BoardModel.SIZE).
 
 const COLORS := {
 	"red": Color(0.95, 0.35, 0.40),
@@ -60,139 +61,140 @@ static func is_stone(shape: String) -> bool:
 
 
 static func all_levels() -> Array:
-	## 8 original levels. Gates: side in {left,right,top,bottom}, start cell index along that edge, size in cells.
+	## 8 original levels on an 8×8 board.
+	## Gates: side in {left,right,top,bottom}, start cell index along that edge, size in cells.
 	return [
-		# Level 1 — warm-up: one red 1x1, red gate on right
+		# Level 1 — warm-up: one red 1x1 → right gate
 		{
 			"id": 1,
 			"title": "第一次逃脫",
-			"par": 3,
-			"gold": 25,
-			"gates": [
-				{"side": "right", "start": 2, "size": 1, "color": "red"},
-			],
-			"blocks": [
-				{"shape": "1x1", "color": "red", "x": 1, "y": 2},
-			],
-		},
-		# Level 2 — horizontal bar + matching gate
-		{
-			"id": 2,
-			"title": "長長的朋友",
 			"par": 4,
 			"gold": 30,
 			"gates": [
-				{"side": "right", "start": 1, "size": 1, "color": "blue"},
+				{"side": "right", "start": 3, "size": 1, "color": "red"},
 			],
 			"blocks": [
-				{"shape": "1x2", "color": "blue", "x": 0, "y": 1},
-				{"shape": "1x1", "color": "blue", "x": 3, "y": 3},
+				{"shape": "1x1", "color": "red", "x": 2, "y": 3},
+			],
+		},
+		# Level 2 — horizontal 1x2 + 1x1 both blue (tests multi-cell exit)
+		{
+			"id": 2,
+			"title": "長長的朋友",
+			"par": 6,
+			"gold": 35,
+			"gates": [
+				{"side": "right", "start": 2, "size": 1, "color": "blue"},
+			],
+			"blocks": [
+				{"shape": "1x2", "color": "blue", "x": 1, "y": 2},
+				{"shape": "1x1", "color": "blue", "x": 4, "y": 4},
 			],
 		},
 		# Level 3 — two colors, two gates
 		{
 			"id": 3,
 			"title": "紅藍合作",
-			"par": 6,
-			"gold": 40,
+			"par": 8,
+			"gold": 45,
 			"gates": [
-				{"side": "right", "start": 0, "size": 1, "color": "red"},
-				{"side": "bottom", "start": 3, "size": 1, "color": "blue"},
+				{"side": "right", "start": 1, "size": 1, "color": "red"},
+				{"side": "bottom", "start": 4, "size": 1, "color": "blue"},
 			],
 			"blocks": [
-				{"shape": "1x1", "color": "red", "x": 2, "y": 0},
-				{"shape": "2x1", "color": "blue", "x": 3, "y": 2},
-				{"shape": "1x1", "color": "red", "x": 4, "y": 1},
+				{"shape": "1x1", "color": "red", "x": 2, "y": 1},
+				{"shape": "2x1", "color": "blue", "x": 4, "y": 3},
+				{"shape": "1x1", "color": "red", "x": 5, "y": 2},
 			],
 		},
 		# Level 4 — introduce stones
 		{
 			"id": 4,
 			"title": "石頭擋路",
-			"par": 7,
-			"gold": 45,
+			"par": 10,
+			"gold": 50,
 			"gates": [
-				{"side": "left", "start": 2, "size": 1, "color": "green"},
-				{"side": "right", "start": 4, "size": 1, "color": "yellow"},
+				{"side": "left", "start": 3, "size": 1, "color": "green"},
+				{"side": "right", "start": 5, "size": 1, "color": "yellow"},
 			],
 			"blocks": [
-				{"shape": "stone_1", "color": "stone", "x": 2, "y": 3},
-				{"shape": "stone_1", "color": "stone", "x": 3, "y": 1},
-				{"shape": "1x2", "color": "green", "x": 1, "y": 2},
-				{"shape": "1x1", "color": "yellow", "x": 4, "y": 0},
-				{"shape": "2x1", "color": "yellow", "x": 5, "y": 3},
+				{"shape": "stone_1", "color": "stone", "x": 3, "y": 4},
+				{"shape": "stone_1", "color": "stone", "x": 4, "y": 2},
+				{"shape": "1x2", "color": "green", "x": 1, "y": 3},
+				{"shape": "1x1", "color": "yellow", "x": 5, "y": 1},
+				{"shape": "2x1", "color": "yellow", "x": 6, "y": 4},
 			],
 		},
 		# Level 5 — 2x2 square needs wide gate
 		{
 			"id": 5,
 			"title": "大方塊出門",
-			"par": 8,
-			"gold": 50,
+			"par": 10,
+			"gold": 55,
 			"gates": [
-				{"side": "bottom", "start": 2, "size": 2, "color": "orange"},
-				{"side": "top", "start": 0, "size": 1, "color": "purple"},
+				{"side": "bottom", "start": 3, "size": 2, "color": "orange"},
+				{"side": "top", "start": 1, "size": 1, "color": "purple"},
 			],
 			"blocks": [
-				{"shape": "2x2", "color": "orange", "x": 2, "y": 1},
-				{"shape": "1x1", "color": "purple", "x": 0, "y": 2},
-				{"shape": "stone_2h", "color": "stone", "x": 4, "y": 4},
+				{"shape": "2x2", "color": "orange", "x": 3, "y": 2},
+				{"shape": "1x1", "color": "purple", "x": 1, "y": 3},
+				{"shape": "stone_2h", "color": "stone", "x": 5, "y": 5},
 			],
 		},
 		# Level 6 — axis lock (↔ horizontal only / ↕ vertical only)
 		{
 			"id": 6,
 			"title": "只能直走",
-			"par": 9,
-			"gold": 55,
+			"par": 12,
+			"gold": 60,
 			"gates": [
-				{"side": "right", "start": 1, "size": 1, "color": "red"},
-				{"side": "bottom", "start": 4, "size": 1, "color": "blue"},
+				{"side": "right", "start": 2, "size": 1, "color": "red"},
+				{"side": "bottom", "start": 5, "size": 1, "color": "blue"},
 			],
 			"blocks": [
-				{"shape": "1x3", "color": "red", "x": 0, "y": 1, "axis": "h"},
-				{"shape": "3x1", "color": "blue", "x": 4, "y": 2, "axis": "v"},
-				{"shape": "stone_1", "color": "stone", "x": 2, "y": 3},
-				{"shape": "1x1", "color": "red", "x": 5, "y": 0},
+				{"shape": "1x3", "color": "red", "x": 1, "y": 2, "axis": "h"},
+				{"shape": "3x1", "color": "blue", "x": 5, "y": 3, "axis": "v"},
+				{"shape": "stone_1", "color": "stone", "x": 3, "y": 4},
+				{"shape": "1x1", "color": "red", "x": 6, "y": 1},
 			],
 		},
 		# Level 7 — L piece + multi-color scramble
 		{
 			"id": 7,
 			"title": "彎彎的腳",
-			"par": 12,
-			"gold": 70,
+			"par": 14,
+			"gold": 75,
 			"gates": [
-				{"side": "left", "start": 0, "size": 2, "color": "green"},
-				{"side": "right", "start": 3, "size": 1, "color": "yellow"},
-				{"side": "bottom", "start": 1, "size": 1, "color": "purple"},
+				{"side": "left", "start": 1, "size": 2, "color": "green"},
+				{"side": "right", "start": 4, "size": 1, "color": "yellow"},
+				{"side": "bottom", "start": 2, "size": 1, "color": "purple"},
 			],
 			"blocks": [
-				{"shape": "L_se", "color": "green", "x": 2, "y": 1},
-				{"shape": "1x2", "color": "yellow", "x": 3, "y": 3},
-				{"shape": "1x1", "color": "purple", "x": 1, "y": 4},
-				{"shape": "stone_2v", "color": "stone", "x": 0, "y": 2},
-				{"shape": "2x1", "color": "yellow", "x": 5, "y": 1},
+				{"shape": "L_se", "color": "green", "x": 2, "y": 2},
+				{"shape": "1x2", "color": "yellow", "x": 4, "y": 4},
+				{"shape": "1x1", "color": "purple", "x": 2, "y": 6},
+				{"shape": "stone_2v", "color": "stone", "x": 0, "y": 4},
+				{"shape": "2x1", "color": "yellow", "x": 6, "y": 2},
 			],
 		},
 		# Level 8 — ice unlock (ice blocks unlock after N colored exits)
 		{
 			"id": 8,
 			"title": "冰封寶藏",
-			"par": 14,
-			"gold": 80,
+			"par": 16,
+			"gold": 90,
 			"gates": [
-				{"side": "top", "start": 2, "size": 1, "color": "blue"},
-				{"side": "right", "start": 4, "size": 2, "color": "orange"},
-				{"side": "left", "start": 3, "size": 1, "color": "red"},
+				{"side": "top", "start": 3, "size": 1, "color": "blue"},
+				{"side": "right", "start": 5, "size": 2, "color": "orange"},
+				{"side": "left", "start": 4, "size": 1, "color": "red"},
 			],
 			"blocks": [
-				{"shape": "1x1", "color": "blue", "x": 2, "y": 2},
-				{"shape": "1x1", "color": "red", "x": 1, "y": 3},
-				{"shape": "2x2", "color": "orange", "x": 3, "y": 3, "ice": 2},
-				{"shape": "stone_1", "color": "stone", "x": 0, "y": 0},
-				{"shape": "stone_1", "color": "stone", "x": 5, "y": 1},
-				{"shape": "1x2", "color": "blue", "x": 3, "y": 0},
+				{"shape": "1x1", "color": "blue", "x": 3, "y": 3},
+				{"shape": "1x1", "color": "red", "x": 2, "y": 4},
+				{"shape": "2x2", "color": "orange", "x": 4, "y": 4, "ice": 2},
+				{"shape": "stone_1", "color": "stone", "x": 0, "y": 1},
+				{"shape": "stone_1", "color": "stone", "x": 7, "y": 2},
+				{"shape": "1x2", "color": "blue", "x": 4, "y": 1},
 			],
 		},
 	]

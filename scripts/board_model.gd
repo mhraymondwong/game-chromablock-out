@@ -2,7 +2,7 @@ extends RefCounted
 class_name BoardModel
 ## Pure board logic for Color Block Escape.
 
-const SIZE := 6
+const SIZE := 8
 
 var blocks: Array = []  # each: {id, shape, color, x, y, axis, ice, frozen, cells}
 var gates: Array = []
@@ -213,21 +213,17 @@ func can_exit(id: int, dir: Vector2i) -> Dictionary:
 		side = "top"
 	else:
 		return {}
-	var sz := LevelData.shape_size(str(blk.shape))
-	var need: int = sz.y if side in ["left", "right"] else sz.x
-	# For L shapes, need is max span on the exit axis — use actual cell span
-	if side in ["left", "right"]:
-		var ys: Array = []
-		for c in cells:
-			if not ys.has(c.y):
-				ys.append(c.y)
-		need = ys.size()
-	else:
-		var xs: Array = []
-		for c in cells:
-			if not xs.has(c.x):
-				xs.append(c.x)
-		need = xs.size()
+	# Gate must cover the full span of the piece perpendicular to the exit direction
+	var min_x0 := 999
+	var max_x0 := -1
+	var min_y0 := 999
+	var max_y0 := -1
+	for c in cells:
+		min_x0 = mini(min_x0, c.x)
+		max_x0 = maxi(max_x0, c.x)
+		min_y0 = mini(min_y0, c.y)
+		max_y0 = maxi(max_y0, c.y)
+	var need: int = (max_y0 - min_y0 + 1) if side in ["left", "right"] else (max_x0 - min_x0 + 1)
 	var gate: Dictionary = {}
 	for g in gates:
 		if str(g.side) != side:
@@ -240,53 +236,39 @@ func can_exit(id: int, dir: Vector2i) -> Dictionary:
 		break
 	if gate.is_empty():
 		return {}
-	# Block must be flush against that edge
+	# Block must touch that edge (max/min along exit axis), not every cell on the rim —
+	# otherwise horizontal bars can never exit left/right (and vertical never top/bottom).
 	var g_start: int = int(gate.start)
 	var g_end: int = g_start + int(gate.size) - 1
+	var min_x := 999
+	var max_x := -1
+	var min_y := 999
+	var max_y := -1
+	for c in cells:
+		min_x = mini(min_x, c.x)
+		max_x = maxi(max_x, c.x)
+		min_y = mini(min_y, c.y)
+		max_y = maxi(max_y, c.y)
 	match side:
 		"right":
-			for c in cells:
-				if c.x != SIZE - 1:
-					return {}
-			var ys2: Array = []
-			for c in cells:
-				if not ys2.has(c.y):
-					ys2.append(c.y)
-			ys2.sort()
-			if ys2[0] < g_start or ys2[ys2.size() - 1] > g_end:
+			if max_x != SIZE - 1:
+				return {}
+			if min_y < g_start or max_y > g_end:
 				return {}
 		"left":
-			for c in cells:
-				if c.x != 0:
-					return {}
-			var ys3: Array = []
-			for c in cells:
-				if not ys3.has(c.y):
-					ys3.append(c.y)
-			ys3.sort()
-			if ys3[0] < g_start or ys3[ys3.size() - 1] > g_end:
+			if min_x != 0:
+				return {}
+			if min_y < g_start or max_y > g_end:
 				return {}
 		"bottom":
-			for c in cells:
-				if c.y != SIZE - 1:
-					return {}
-			var xs2: Array = []
-			for c in cells:
-				if not xs2.has(c.x):
-					xs2.append(c.x)
-			xs2.sort()
-			if xs2[0] < g_start or xs2[xs2.size() - 1] > g_end:
+			if max_y != SIZE - 1:
+				return {}
+			if min_x < g_start or max_x > g_end:
 				return {}
 		"top":
-			for c in cells:
-				if c.y != 0:
-					return {}
-			var xs3: Array = []
-			for c in cells:
-				if not xs3.has(c.x):
-					xs3.append(c.x)
-			xs3.sort()
-			if xs3[0] < g_start or xs3[xs3.size() - 1] > g_end:
+			if min_y != 0:
+				return {}
+			if min_x < g_start or max_x > g_end:
 				return {}
 	return gate
 
