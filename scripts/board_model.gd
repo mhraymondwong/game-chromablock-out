@@ -310,51 +310,45 @@ func is_clear() -> bool:
 	return colored_remaining() == 0
 
 
-## Score out of 100 (+ combo).
+## Score out of 100 (+ combo). Kinder thresholds for kids — clear never fails.
 static func compute_score(move_count: int, par: int, elapsed: float, gold: float, combo: int) -> Dictionary:
-	# Moves portion: 50 max
+	# Moves portion: 50 max; soft penalty past par
 	var move_pts := 50
 	if move_count > par:
-		move_pts = maxi(10, 50 - 4 * (move_count - par))
-	# Time portion: 50 max
+		move_pts = maxi(20, 50 - 3 * (move_count - par))
+	# Time portion: 50 max; gentle decay, floor at 15 (no fail)
 	var time_pts := 50
 	if elapsed > gold:
-		if elapsed <= 180.0:
-			# decay from 50 at gold to 10 at 180
-			var t := (elapsed - gold) / maxf(1.0, 180.0 - gold)
-			time_pts = int(round(lerpf(50.0, 10.0, clampf(t, 0.0, 1.0))))
-		else:
-			# overtime: from 10, -1/sec → 0 fail
-			time_pts = maxi(0, 10 - int(floor(elapsed - 180.0)))
-	var failed := time_pts <= 0 and elapsed > 180.0
+		var t := (elapsed - gold) / maxf(1.0, gold)  # at 2× gold → ~15
+		time_pts = int(round(lerpf(50.0, 15.0, clampf(t, 0.0, 1.0))))
 	var total := move_pts + time_pts + combo
-	if failed:
-		total = 0
-	var stars := 0
-	if total >= 85:
+	# Stars: clear always ≥1; 3★ reachable without speed-running
+	var stars := 1
+	if total >= 75:
 		stars = 3
-	elif total >= 60:
+	elif total >= 50:
 		stars = 2
-	elif total >= 1:
-		stars = 1
 	return {
 		"total": total,
 		"moves": move_pts,
 		"time": time_pts,
 		"combo": combo,
 		"stars": stars,
-		"failed": failed,
+		"failed": false,
+		"move_count": move_count,
+		"elapsed": elapsed,
 	}
 
 
 ## Hint: prefer a block that can exit now; else a movable block toward a gate.
+## Returns id, dir, exit, ghost_cells (Array of Vector2i), msg (zh-Hant).
 func hint() -> Dictionary:
 	for b in blocks:
 		if bool(b.stone) or bool(b.get("frozen", false)):
 			continue
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if not can_exit(int(b.id), d).is_empty():
-				return {"id": int(b.id), "dir": d, "exit": true}
+				return _hint_pack(b, d, true)
 	# Otherwise suggest sliding toward nearest matching gate
 	for b in blocks:
 		if bool(b.stone) or bool(b.get("frozen", false)):
@@ -363,26 +357,60 @@ func hint() -> Dictionary:
 		for g in gates:
 			if str(g.color) != color:
 				continue
-			var dir := Vector2i.ZERO
-			match str(g.side):
-				"right":
-					dir = Vector2i(1, 0)
-				"left":
-					dir = Vector2i(-1, 0)
-				"bottom":
-					dir = Vector2i(0, 1)
-				"top":
-					dir = Vector2i(0, -1)
+			var dir := _side_dir(str(g.side))
+			if dir == Vector2i.ZERO:
+				continue
 			if try_probe_move(int(b.id), dir.x, dir.y):
-				return {"id": int(b.id), "dir": dir, "exit": false}
+				return _hint_pack(b, dir, false)
 	# Any free move
 	for b in blocks:
 		if bool(b.stone) or bool(b.get("frozen", false)):
 			continue
 		for d in [Vector2i(1, 0), Vector2i(-1, 0), Vector2i(0, 1), Vector2i(0, -1)]:
 			if try_probe_move(int(b.id), d.x, d.y):
-				return {"id": int(b.id), "dir": d, "exit": false}
+				return _hint_pack(b, d, false)
 	return {}
+
+
+func _side_dir(side: String) -> Vector2i:
+	match side:
+		"right":
+			return Vector2i(1, 0)
+		"left":
+			return Vector2i(-1, 0)
+		"bottom":
+			return Vector2i(0, 1)
+		"top":
+			return Vector2i(0, -1)
+	return Vector2i.ZERO
+
+
+func _dir_zh(d: Vector2i) -> String:
+	if d == Vector2i(1, 0):
+		return "右"
+	if d == Vector2i(-1, 0):
+		return "左"
+	if d == Vector2i(0, 1):
+		return "下"
+	if d == Vector2i(0, -1):
+		return "上"
+	return ""
+
+
+func _hint_pack(b: Dictionary, d: Vector2i, is_exit: bool) -> Dictionary:
+	var ghost: Array = []
+	if is_exit:
+		for c in b.cells:
+			ghost.append(Vector2i(c.x + d.x, c.y + d.y))
+	else:
+		for c in LevelData.shape_cells(str(b.shape)):
+			ghost.append(Vector2i(int(b.x) + c.x + d.x, int(b.y) + c.y + d.y))
+	var msg: String
+	if is_exit:
+		msg = "往%s滑出同色門！" % _dir_zh(d)
+	else:
+		msg = "把這塊往%s移一格" % _dir_zh(d)
+	return {"id": int(b.id), "dir": d, "exit": is_exit, "ghost_cells": ghost, "msg": msg}
 
 
 func try_probe_move(id: int, dx: int, dy: int) -> bool:

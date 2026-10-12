@@ -69,7 +69,7 @@ static func all_levels() -> Array:
 			"id": 1,
 			"title": "第一次逃脫",
 			"par": 4,
-			"gold": 30,
+			"gold": 40,
 			"gates": [
 				{"side": "right", "start": 3, "size": 1, "color": "red"},
 			],
@@ -91,20 +91,20 @@ static func all_levels() -> Array:
 				{"shape": "1x1", "color": "blue", "x": 4, "y": 4},
 			],
 		},
-		# Level 3 — two colors, two gates
+		# Level 3 — two colors, two gates (open lanes)
 		{
 			"id": 3,
 			"title": "紅藍合作",
 			"par": 8,
 			"gold": 45,
 			"gates": [
-				{"side": "right", "start": 1, "size": 1, "color": "red"},
-				{"side": "bottom", "start": 4, "size": 1, "color": "blue"},
+				{"side": "right", "start": 2, "size": 1, "color": "red"},
+				{"side": "bottom", "start": 3, "size": 1, "color": "blue"},
 			],
 			"blocks": [
-				{"shape": "1x1", "color": "red", "x": 2, "y": 1},
-				{"shape": "2x1", "color": "blue", "x": 4, "y": 3},
-				{"shape": "1x1", "color": "red", "x": 5, "y": 2},
+				{"shape": "1x1", "color": "red", "x": 1, "y": 2},
+				{"shape": "2x1", "color": "blue", "x": 3, "y": 2},
+				{"shape": "1x1", "color": "red", "x": 5, "y": 4},
 			],
 		},
 		# Level 4 — introduce stones
@@ -158,43 +158,43 @@ static func all_levels() -> Array:
 				{"shape": "1x1", "color": "red", "x": 6, "y": 1},
 			],
 		},
-		# Level 7 — L piece + multi-color scramble
+		# Level 7 — L piece + multi-color (gates cover piece spans)
 		{
 			"id": 7,
 			"title": "彎彎的腳",
 			"par": 14,
 			"gold": 75,
 			"gates": [
-				{"side": "left", "start": 1, "size": 2, "color": "green"},
+				{"side": "left", "start": 2, "size": 2, "color": "green"},
 				{"side": "right", "start": 4, "size": 2, "color": "yellow"},
-				{"side": "bottom", "start": 2, "size": 1, "color": "purple"},
+				{"side": "bottom", "start": 1, "size": 1, "color": "purple"},
 			],
 			"blocks": [
 				{"shape": "L_se", "color": "green", "x": 2, "y": 2},
-				{"shape": "1x2", "color": "yellow", "x": 4, "y": 4},
-				{"shape": "1x1", "color": "purple", "x": 2, "y": 6},
-				{"shape": "stone_2v", "color": "stone", "x": 0, "y": 4},
-				{"shape": "2x1", "color": "yellow", "x": 6, "y": 2},
+				{"shape": "1x2", "color": "yellow", "x": 4, "y": 5},
+				{"shape": "1x1", "color": "purple", "x": 1, "y": 5},
+				{"shape": "stone_2v", "color": "stone", "x": 6, "y": 0},
+				{"shape": "2x1", "color": "yellow", "x": 6, "y": 4},
 			],
 		},
-		# Level 8 — ice unlock (ice blocks unlock after N colored exits)
+		# Level 8 — ice unlock (ice after 2 exits); gates aligned to piece spans
 		{
 			"id": 8,
 			"title": "冰封寶藏",
-			"par": 16,
+			"par": 14,
 			"gold": 90,
 			"gates": [
 				{"side": "top", "start": 3, "size": 2, "color": "blue"},
-				{"side": "right", "start": 5, "size": 2, "color": "orange"},
-				{"side": "left", "start": 4, "size": 1, "color": "red"},
+				{"side": "right", "start": 4, "size": 2, "color": "orange"},
+				{"side": "left", "start": 5, "size": 1, "color": "red"},
 			],
 			"blocks": [
-				{"shape": "1x1", "color": "blue", "x": 3, "y": 3},
-				{"shape": "1x1", "color": "red", "x": 2, "y": 4},
-				{"shape": "2x2", "color": "orange", "x": 4, "y": 4, "ice": 2},
-				{"shape": "stone_1", "color": "stone", "x": 0, "y": 1},
-				{"shape": "stone_1", "color": "stone", "x": 7, "y": 2},
-				{"shape": "1x2", "color": "blue", "x": 4, "y": 1},
+				{"shape": "1x2", "color": "blue", "x": 3, "y": 1},
+				{"shape": "1x1", "color": "red", "x": 1, "y": 5},
+				{"shape": "1x1", "color": "blue", "x": 5, "y": 3},
+				{"shape": "2x2", "color": "orange", "x": 3, "y": 4, "ice": 2},
+				{"shape": "stone_1", "color": "stone", "x": 0, "y": 2},
+				{"shape": "stone_1", "color": "stone", "x": 7, "y": 1},
 			],
 		},
 	]

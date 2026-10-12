@@ -21,6 +21,10 @@ var drag_start_mouse: Vector2 = Vector2.ZERO
 var drag_start_cell: Vector2i = Vector2i.ZERO
 var drag_origin_xy: Vector2i = Vector2i.ZERO
 var gesture_counted: bool = false
+var last_move_block_id: int = -1  # consecutive nudges of same block = 1 step
+var level_tip: String = ""
+var level_tip_t: float = 0.0
+var taught_features: Dictionary = {"stone": false, "axis": false, "ice": false}
 var active_touch_index: int = -1  # -1 = mouse / none
 var last_pointer_ms: int = 0
 
@@ -245,6 +249,11 @@ func _load_progress() -> void:
 			unlocked = int(cfg.get_value("p", "unlocked", 1))
 			best_stars = cfg.get_value("p", "stars", best_stars)
 			skip_rules_howto = bool(cfg.get_value("p", "skip_rules", false))
+			taught_features = {
+				"stone": bool(cfg.get_value("p", "taught_stone", false)),
+				"axis": bool(cfg.get_value("p", "taught_axis", false)),
+				"ice": bool(cfg.get_value("p", "taught_ice", false)),
+			}
 
 
 func _save_progress() -> void:
@@ -252,6 +261,9 @@ func _save_progress() -> void:
 	cfg.set_value("p", "unlocked", unlocked)
 	cfg.set_value("p", "stars", best_stars)
 	cfg.set_value("p", "skip_rules", skip_rules_howto)
+	cfg.set_value("p", "taught_stone", bool(taught_features.get("stone", false)))
+	cfg.set_value("p", "taught_axis", bool(taught_features.get("axis", false)))
+	cfg.set_value("p", "taught_ice", bool(taught_features.get("ice", false)))
 	cfg.save("user://cbe_progress.cfg")
 
 
@@ -262,6 +274,7 @@ func _start_level(idx: int) -> void:
 	selected_id = -1
 	dragging = false
 	active_touch_index = -1
+	last_move_block_id = -1
 	elapsed = 0.0
 	running = not show_start and not show_rules and not show_map
 	show_clear = false
@@ -269,23 +282,57 @@ func _start_level(idx: int) -> void:
 	clear_result = {}
 	hint_flash = {}
 	exit_anim.clear()
+	_maybe_teach_features()
 	queue_redraw()
+
+
+func _level_has_feature(feat: String) -> bool:
+	for b in level_data.get("blocks", []):
+		var shape: String = str(b.get("shape", ""))
+		if feat == "stone" and LevelData.is_stone(shape):
+			return true
+		if feat == "axis" and str(b.get("axis", "")) != "":
+			return true
+		if feat == "ice" and int(b.get("ice", 0)) > 0:
+			return true
+	return false
+
+
+func _maybe_teach_features() -> void:
+	## First time a mechanic appears: short tip (not a wall of rules).
+	level_tip = ""
+	level_tip_t = 0.0
+	if _level_has_feature("stone") and not bool(taught_features.get("stone", false)):
+		level_tip = "灰色石頭擋路，推不走喔"
+		taught_features["stone"] = true
+		level_tip_t = 4.5
+		_save_progress()
+	elif _level_has_feature("axis") and not bool(taught_features.get("axis", false)):
+		level_tip = "有 ↔ / ↕ 的方塊只能橫或直走"
+		taught_features["axis"] = true
+		level_tip_t = 4.5
+		_save_progress()
+	elif _level_has_feature("ice") and not bool(taught_features.get("ice", false)):
+		level_tip = "結冰方塊要先讓其他顏色逃脫才解凍"
+		taught_features["ice"] = true
+		level_tip_t = 4.5
+		_save_progress()
 
 
 func _process(delta: float) -> void:
 	if running and not show_start and not show_clear and not show_fail and not show_rules and not show_map:
 		elapsed += delta
-		var gold: float = float(level_data.get("gold", 60))
-		var sc: Dictionary = BoardModel.compute_score(model.moves, int(level_data.get("par", 5)), elapsed, gold, model.combo_bonus)
-		if sc.failed:
-			running = false
-			show_fail = true
+		# No hard time-fail for kids — stars soften with time instead.
 	if hint_timer > 0.0:
 		hint_timer -= delta
 		if hint_timer <= 0.0:
 			hint_flash = {}
 	if toast_t > 0.0:
 		toast_t -= delta
+	if level_tip_t > 0.0:
+		level_tip_t -= delta
+		if level_tip_t <= 0.0:
+			level_tip = ""
 	if press_flash_t > 0.0:
 		press_flash_t -= delta
 		if press_flash_t <= 0.0:
@@ -344,6 +391,8 @@ func _draw() -> void:
 
 	if toast_t > 0.0:
 		_draw_toast()
+	if level_tip_t > 0.0 and level_tip != "":
+		_draw_level_tip()
 
 
 func _draw_start_screen() -> void:
@@ -473,43 +522,111 @@ func _round_rect(r: Rect2, rad: float, col: Color) -> void:
 	draw_circle(r.position + Vector2(r.size.x - rad, r.size.y - rad), rad, col)
 
 
+func _selected_color() -> String:
+	if selected_id < 0:
+		return ""
+	var blk: Dictionary = model.get_block(selected_id)
+	if blk.is_empty() or bool(blk.stone):
+		return ""
+	return str(blk.color)
+
+
 func _draw_gates() -> void:
-	var door_w := maxf(14.0, cell * 0.22)
+	## Gates sit on the frame edge; width = cells accepted.
+	## When a block is selected, only matching-color gate(s) glow.
+	var door_w := maxf(16.0, cell * 0.28)
+	var sel: String = _selected_color()
+	var pulse: float = 0.55 + 0.45 * abs(sin(Time.get_ticks_msec() * 0.006))
 	for g in model.gates:
 		var cname: String = str(g.color)
 		var col: Color = LevelData.COLORS.get(cname, Color.WHITE)
 		var start: int = int(g.start)
 		var size: int = int(g.size)
+		var matched: bool = (sel == "" or sel == cname)
+		var dimmed: bool = (sel != "" and sel != cname)
+		var alpha: float = 0.28 if dimmed else (1.0 if matched and sel != "" else 0.92)
+		col.a = alpha
+		var glow: Color = col
+		glow.a = alpha * (0.55 + 0.35 * pulse if (matched and sel != "") else 0.35)
 		match str(g.side):
 			"right":
 				for i in size:
 					var r := _cell_rect(BoardModel.SIZE - 1, start + i)
-					var door := Rect2(r.position.x + r.size.x + 3, r.position.y + cell * 0.1, door_w, r.size.y - cell * 0.2)
+					var door := Rect2(r.position.x + r.size.x + 2, r.position.y + cell * 0.08, door_w, r.size.y - cell * 0.16)
+					if matched and sel != "":
+						_round_rect(door.grow(4), 8, glow)
 					_round_rect(door, 6, col)
-					draw_rect(door, Color(1, 1, 1, 0.45), false, 2.0)
-					# glossy highlight on door
-					_round_rect(Rect2(door.position + Vector2(2, 3), Vector2(door.size.x * 0.35, door.size.y - 6)), 4, Color(1, 1, 1, 0.35))
+					draw_rect(door, Color(1, 1, 1, 0.5 * alpha), false, 2.0)
+					_round_rect(Rect2(door.position + Vector2(2, 3), Vector2(door.size.x * 0.35, door.size.y - 6)), 4, Color(1, 1, 1, 0.35 * alpha))
+				if matched:
+					_draw_gate_arrow("right", start, size, col, alpha)
 			"left":
 				for i in size:
 					var r2 := _cell_rect(0, start + i)
-					var door2 := Rect2(r2.position.x - door_w - 3, r2.position.y + cell * 0.1, door_w, r2.size.y - cell * 0.2)
+					var door2 := Rect2(r2.position.x - door_w - 2, r2.position.y + cell * 0.08, door_w, r2.size.y - cell * 0.16)
+					if matched and sel != "":
+						_round_rect(door2.grow(4), 8, glow)
 					_round_rect(door2, 6, col)
-					draw_rect(door2, Color(1, 1, 1, 0.45), false, 2.0)
-					_round_rect(Rect2(door2.position + Vector2(door2.size.x * 0.55, 3), Vector2(door2.size.x * 0.35, door2.size.y - 6)), 4, Color(1, 1, 1, 0.35))
+					draw_rect(door2, Color(1, 1, 1, 0.5 * alpha), false, 2.0)
+					_round_rect(Rect2(door2.position + Vector2(door2.size.x * 0.55, 3), Vector2(door2.size.x * 0.35, door2.size.y - 6)), 4, Color(1, 1, 1, 0.35 * alpha))
+				if matched:
+					_draw_gate_arrow("left", start, size, col, alpha)
 			"bottom":
 				for i in size:
 					var r3 := _cell_rect(start + i, BoardModel.SIZE - 1)
-					var door3 := Rect2(r3.position.x + cell * 0.1, r3.position.y + r3.size.y + 3, r3.size.x - cell * 0.2, door_w)
+					var door3 := Rect2(r3.position.x + cell * 0.08, r3.position.y + r3.size.y + 2, r3.size.x - cell * 0.16, door_w)
+					if matched and sel != "":
+						_round_rect(door3.grow(4), 8, glow)
 					_round_rect(door3, 6, col)
-					draw_rect(door3, Color(1, 1, 1, 0.45), false, 2.0)
-					_round_rect(Rect2(door3.position + Vector2(3, 2), Vector2(door3.size.x - 6, door3.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
+					draw_rect(door3, Color(1, 1, 1, 0.5 * alpha), false, 2.0)
+					_round_rect(Rect2(door3.position + Vector2(3, 2), Vector2(door3.size.x - 6, door3.size.y * 0.4)), 4, Color(1, 1, 1, 0.35 * alpha))
+				if matched:
+					_draw_gate_arrow("bottom", start, size, col, alpha)
 			"top":
 				for i in size:
 					var r4 := _cell_rect(start + i, 0)
-					var door4 := Rect2(r4.position.x + cell * 0.1, r4.position.y - door_w - 3, r4.size.x - cell * 0.2, door_w)
+					var door4 := Rect2(r4.position.x + cell * 0.08, r4.position.y - door_w - 2, r4.size.x - cell * 0.16, door_w)
+					if matched and sel != "":
+						_round_rect(door4.grow(4), 8, glow)
 					_round_rect(door4, 6, col)
-					draw_rect(door4, Color(1, 1, 1, 0.45), false, 2.0)
-					_round_rect(Rect2(door4.position + Vector2(3, door4.size.y * 0.45), Vector2(door4.size.x - 6, door4.size.y * 0.4)), 4, Color(1, 1, 1, 0.35))
+					draw_rect(door4, Color(1, 1, 1, 0.5 * alpha), false, 2.0)
+					_round_rect(Rect2(door4.position + Vector2(3, door4.size.y * 0.45), Vector2(door4.size.x - 6, door4.size.y * 0.4)), 4, Color(1, 1, 1, 0.35 * alpha))
+				if matched:
+					_draw_gate_arrow("top", start, size, col, alpha)
+
+
+func _draw_gate_arrow(side: String, start: int, size: int, col: Color, alpha: float) -> void:
+	var mid := start + (size - 1) * 0.5
+	var cx: float
+	var cy: float
+	var pts: PackedVector2Array
+	var s := maxf(8.0, cell * 0.22)
+	match side:
+		"right":
+			var r := _cell_rect(BoardModel.SIZE - 1, int(round(mid)))
+			cx = r.position.x + r.size.x + maxf(16.0, cell * 0.28) + s * 0.9
+			cy = board_origin.y + mid * (cell + gap) + cell * 0.5
+			pts = PackedVector2Array([Vector2(cx - s, cy - s), Vector2(cx + s * 0.6, cy), Vector2(cx - s, cy + s)])
+		"left":
+			var r2 := _cell_rect(0, int(round(mid)))
+			cx = r2.position.x - maxf(16.0, cell * 0.28) - s * 0.9
+			cy = board_origin.y + mid * (cell + gap) + cell * 0.5
+			pts = PackedVector2Array([Vector2(cx + s, cy - s), Vector2(cx - s * 0.6, cy), Vector2(cx + s, cy + s)])
+		"bottom":
+			var r3 := _cell_rect(int(round(mid)), BoardModel.SIZE - 1)
+			cx = board_origin.x + mid * (cell + gap) + cell * 0.5
+			cy = r3.position.y + r3.size.y + maxf(16.0, cell * 0.28) + s * 0.9
+			pts = PackedVector2Array([Vector2(cx - s, cy - s), Vector2(cx, cy + s * 0.6), Vector2(cx + s, cy - s)])
+		"top":
+			var r4 := _cell_rect(int(round(mid)), 0)
+			cx = board_origin.x + mid * (cell + gap) + cell * 0.5
+			cy = r4.position.y - maxf(16.0, cell * 0.28) - s * 0.9
+			pts = PackedVector2Array([Vector2(cx - s, cy + s), Vector2(cx, cy - s * 0.6), Vector2(cx + s, cy + s)])
+		_:
+			return
+	var ac := col
+	ac.a = alpha
+	draw_colored_polygon(pts, ac)
 
 
 func _block_bounds(blk: Dictionary) -> Rect2:
@@ -531,6 +648,9 @@ func _block_bounds(blk: Dictionary) -> Rect2:
 
 
 func _draw_blocks() -> void:
+	# Ghost footprint under blocks when hint is active
+	if not hint_flash.is_empty() and hint_timer > 0.0:
+		_draw_hint_ghost()
 	for b in model.blocks:
 		_draw_one_block(b, 1.0)
 	if not hint_flash.is_empty() and hint_timer > 0.0:
@@ -539,6 +659,28 @@ func _draw_blocks() -> void:
 			var r := _block_bounds(hb)
 			var pulse: float = 0.4 + 0.4 * abs(sin(hint_timer * 8.0))
 			draw_rect(r.grow(6), Color(1, 1, 0.3, pulse), false, 4.0)
+
+
+func _draw_hint_ghost() -> void:
+	var cells: Array = hint_flash.get("ghost_cells", [])
+	if cells.is_empty():
+		return
+	var pulse: float = 0.35 + 0.35 * abs(sin(hint_timer * 7.0))
+	var hb: Dictionary = model.get_block(int(hint_flash.get("id", -1)))
+	var col: Color = LevelData.COLORS.get(str(hb.get("color", "yellow")), Color(1, 1, 0.4))
+	col.a = pulse
+	var rad := maxf(8.0, cell * 0.16)
+	for c in cells:
+		if c.x < 0 or c.y < 0 or c.x >= BoardModel.SIZE or c.y >= BoardModel.SIZE:
+			# Outside board = exit ghost: draw soft blob past the rim
+			var edge := Vector2i(clampi(c.x, 0, BoardModel.SIZE - 1), clampi(c.y, 0, BoardModel.SIZE - 1))
+			var r0 := _cell_rect(edge.x, edge.y)
+			var off := Vector2(signi(c.x - edge.x), signi(c.y - edge.y)) * (cell * 0.55)
+			_round_rect(Rect2(r0.position + off, r0.size).grow(-2), rad, col)
+		else:
+			var r := _cell_rect(c.x, c.y).grow(-2)
+			_round_rect(r, rad, col)
+			draw_rect(r, Color(1, 1, 1, pulse * 0.7), false, 2.0)
 
 
 func _draw_one_block(b: Dictionary, alpha: float) -> void:
@@ -696,15 +838,20 @@ func _draw_modal_rules() -> void:
 	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 72), title, fs_title, Color(1.0, 0.45, 0.25), true)
 	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5 + 1, r.position.y + 73), title, fs_title, Color(1.0, 0.55, 0.2), false)
 
-	var lines := [
+	var lines: Array = [
 		"① 把彩色方塊滑到同色門，讓它們逃脫！",
-		"② 一次拖同一塊算一步；沒動就不計。",
-		"③ 灰色石頭是障礙，永遠不會離開。",
-		"④ 有 ↔ / ↕ 的方塊只能橫／直走。",
-		"⑤ 結冰方塊要先讓其他顏色逃脫才解凍。",
-		"⑥ 步數少、時間快 → 星星越多！",
-		"⑦ 連續逃脫可拿連擊加分喔～",
+		"② 連續拖同一塊只算一步；換一塊才加步。",
 	]
+	# Teach stone / axis / ice only when this level (or toolbar help) uses them
+	var show_all: bool = rules_from_button
+	if show_all or _level_has_feature("stone"):
+		lines.append("③ 灰色石頭是障礙，永遠不會離開。")
+	if show_all or _level_has_feature("axis"):
+		lines.append("④ 有 ↔ / ↕ 的方塊只能橫／直走。")
+	if show_all or _level_has_feature("ice"):
+		lines.append("⑤ 結冰方塊要先讓其他顏色逃脫才解凍。")
+	lines.append("⑥ 步數少一點 → 星星更多！")
+	lines.append("⑦ 連續逃脫可拿連擊加分喔～")
 	# Reserve bottom for checkbox + start so rules text never covers controls
 	var cb := _rules_checkbox_rect()
 	var br := _rules_start_rect()
@@ -799,60 +946,68 @@ func _draw_stars_row(center: Vector2, stars: int, star_size: float = 40.0) -> vo
 
 func _draw_modal_clear() -> void:
 	_draw_modal_dim()
-	var r := _modal_rect(0.9, 0.72)
+	var r := _modal_rect(0.9, 0.78)
 	if tex_modal_clear != null:
 		draw_texture_rect(tex_modal_clear, r, false)
 	else:
 		_round_rect(r, 28, Color(1.0, 0.98, 0.9))
 		draw_rect(r, Color(1.0, 0.7, 0.25), false, 5.0)
-	# Burst title
 	var title := "過關啦！"
 	var fs_title := 38
 	var tw := font.get_string_size(title, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_title).x
-	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5 + 2, r.position.y + 78), title, fs_title, Color(0.9, 0.35, 0.1), true)
-	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 76), title, fs_title, Color(1.0, 0.5, 0.15), false)
-	# Confetti sparkles
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5 + 2, r.position.y + 68), title, fs_title, Color(0.9, 0.35, 0.1), true)
+	_draw_text(Vector2(r.position.x + (r.size.x - tw) * 0.5, r.position.y + 66), title, fs_title, Color(1.0, 0.5, 0.15), false)
 	var tsec := Time.get_ticks_msec() * 0.004
 	for i in 8:
 		var ang := i * PI * 0.25 + tsec
 		var px := r.position.x + r.size.x * 0.5 + cos(ang) * (70.0 + (i % 3) * 12.0)
-		var py := r.position.y + 130.0 + sin(ang) * 18.0
+		var py := r.position.y + 118.0 + sin(ang) * 18.0
 		draw_circle(Vector2(px, py), 4.0 + (i % 3), Color(1.0, 0.85, 0.3, 0.85))
 
 	var stars: int = int(clear_result.get("stars", 0))
-	_draw_stars_row(r.position + Vector2(r.size.x * 0.5, 155), stars, 52.0)
+	_draw_stars_row(r.position + Vector2(r.size.x * 0.5, 138), stars, 52.0)
+
+	# Three clear lines: moves / time / combo (kid-readable)
+	var move_count: int = int(clear_result.get("move_count", model.moves))
+	var par: int = int(level_data.get("par", 5))
+	var el: float = float(clear_result.get("elapsed", elapsed))
+	var mm := int(el) / 60
+	var ss := int(el) % 60
+	var lines := [
+		"步數  %d（目標 %d）" % [move_count, par],
+		"時間  %02d:%02d" % [mm, ss],
+		"連擊  +%d" % int(clear_result.get("combo", 0)),
+	]
+	var y0 := r.position.y + 178.0
+	for i in lines.size():
+		var line: String = str(lines[i])
+		var fs_l := 17
+		var lw := font.get_string_size(line, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_l).x
+		_draw_text(Vector2(r.position.x + (r.size.x - lw) * 0.5, y0 + i * 28.0), line, fs_l, Color(0.4, 0.35, 0.3), true)
 
 	var score_txt := "分數 %d" % int(clear_result.get("total", 0))
-	var fs_sc := 28
+	var fs_sc := 26
 	var sw := font.get_string_size(score_txt, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_sc).x
-	_draw_text(Vector2(r.position.x + (r.size.x - sw) * 0.5, r.position.y + 220), score_txt, fs_sc, Color(0.95, 0.45, 0.15), true)
-
-	var detail := "步數分 %d　時間分 %d　連擊 +%d" % [
-		int(clear_result.get("moves", 0)),
-		int(clear_result.get("time", 0)),
-		int(clear_result.get("combo", 0)),
-	]
-	var fs_d := 14
-	var dw := font.get_string_size(detail, HORIZONTAL_ALIGNMENT_LEFT, -1, fs_d).x
-	_draw_text(Vector2(r.position.x + (r.size.x - dw) * 0.5, r.position.y + 252), detail, fs_d, Color(0.5, 0.45, 0.4), true)
+	_draw_text(Vector2(r.position.x + (r.size.x - sw) * 0.5, y0 + 96.0), score_txt, fs_sc, Color(0.95, 0.45, 0.15), true)
 
 	var btns := _clear_buttons()
+	# Big primary Next; secondary replay / map
+	_draw_fun_button(btns.next, "下一關 ▶", Color(0.35, 0.82, 0.48), tex_fun_green)
 	_draw_fun_button(btns.replay, "再玩一次", Color(1.0, 0.65, 0.3), tex_fun_orange)
-	_draw_fun_button(btns.next, "下一關 ▶", Color(0.4, 0.85, 0.5), tex_fun_green)
 	_draw_fun_button(btns.map, "關卡地圖", Color(0.45, 0.7, 0.95), tex_fun_blue)
 
 
 func _clear_buttons() -> Dictionary:
-	var r := _modal_rect(0.9, 0.72)
-	var bh := maxf(MIN_TOUCH + 8.0, 58.0)
-	var gapb := 12.0
-	var row_y := r.position.y + r.size.y - bh * 2 - gapb - 36
+	var r := _modal_rect(0.9, 0.78)
+	var bh := maxf(MIN_TOUCH + 10.0, 62.0)
+	var gapb := 10.0
+	var next_w := minf(320.0, r.size.x - 48.0)
+	var next_y := r.position.y + r.size.y - bh * 2 - gapb - 28
 	var half := (r.size.x - 48 - gapb) * 0.5
-	var mw := minf(300.0, r.size.x - 48)
 	return {
-		"replay": Rect2(r.position.x + 24, row_y, half, bh),
-		"next": Rect2(r.position.x + 24 + half + gapb, row_y, half, bh),
-		"map": Rect2(r.position.x + (r.size.x - mw) * 0.5, row_y + bh + gapb, mw, bh),
+		"next": Rect2(r.position.x + (r.size.x - next_w) * 0.5, next_y, next_w, bh),
+		"replay": Rect2(r.position.x + 24, next_y + bh + gapb, half, bh * 0.92),
+		"map": Rect2(r.position.x + 24 + half + gapb, next_y + bh + gapb, half, bh * 0.92),
 	}
 
 
@@ -959,9 +1114,22 @@ func _draw_toast() -> void:
 	_draw_text(r.position + Vector2(24, 28), toast, 16 if is_narrow else 18, Color(1, 1, 1))
 
 
+func _draw_level_tip() -> void:
+	var tw := minf(vp.x - 28.0, 420.0)
+	var th := 48.0
+	var y := hud_h + 6.0
+	var r := Rect2((vp.x - tw) * 0.5, y, tw, th)
+	var fade: float = clampf(level_tip_t / 0.4, 0.0, 1.0) if level_tip_t < 0.4 else 1.0
+	_round_rect(r, 14, Color(0.18, 0.35, 0.55, 0.88 * fade))
+	draw_rect(r, Color(1, 1, 1, 0.35 * fade), false, 2.0)
+	var fs := 15
+	var sw := font.get_string_size(level_tip, HORIZONTAL_ALIGNMENT_LEFT, -1, fs).x
+	_draw_text(Vector2(r.position.x + (r.size.x - sw) * 0.5, r.position.y + r.size.y * 0.68), level_tip, fs, Color(1, 1, 1, fade), true)
+
+
 func _show_toast(msg: String) -> void:
 	toast = msg
-	toast_t = 2.0
+	toast_t = 2.2
 
 
 func _input(event: InputEvent) -> void:
@@ -1039,6 +1207,16 @@ func _input(event: InputEvent) -> void:
 			return
 		_pointer_drag(event.position)
 
+
+
+
+func _count_move_if_needed(block_id: int) -> void:
+	## Consecutive nudges of the SAME block count as 1 step until another block is touched.
+	if block_id < 0:
+		return
+	if block_id != last_move_block_id:
+		model.moves += 1
+		last_move_block_id = block_id
 
 
 func _pointer_down(pos: Vector2) -> void:
@@ -1153,7 +1331,7 @@ func _pointer_drag(pos: Vector2) -> void:
 	if want != Vector2i.ZERO:
 		if model.try_move(selected_id, want.x, want.y):
 			if not gesture_counted:
-				model.moves += 1
+				_count_move_if_needed(selected_id)
 				gesture_counted = true
 			drag_moved = true
 			_try_auto_exit(selected_id)
@@ -1167,7 +1345,7 @@ func _pointer_drag(pos: Vector2) -> void:
 				edir = Vector2i(0, signi(want.y))
 			if edir != Vector2i.ZERO and not model.can_exit(selected_id, edir).is_empty():
 				if not gesture_counted:
-					model.moves += 1
+					_count_move_if_needed(selected_id)
 					gesture_counted = true
 				drag_moved = true
 				if model.try_exit(selected_id, edir, elapsed):
@@ -1184,11 +1362,11 @@ func _keyboard_move(d: Vector2i) -> void:
 	model.push_history()
 	var moved := model.try_move(selected_id, d.x, d.y)
 	if moved:
-		model.moves += 1
+		_count_move_if_needed(selected_id)
 		_try_auto_exit(selected_id)
 	else:
 		if model.try_exit(selected_id, d, elapsed):
-			model.moves += 1
+			_count_move_if_needed(selected_id)
 			_on_exit_visual(selected_id, d)
 			selected_id = -1
 			_check_clear()
@@ -1242,6 +1420,7 @@ func _check_clear() -> void:
 func _do_undo() -> void:
 	if model.undo():
 		selected_id = -1
+		last_move_block_id = -1
 		_show_toast("已復原")
 	else:
 		_show_toast("沒有可以復原的步驟")
@@ -1250,12 +1429,12 @@ func _do_undo() -> void:
 
 func _do_hint() -> void:
 	hint_flash = model.hint()
-	hint_timer = 2.5
+	hint_timer = 3.0
 	if hint_flash.is_empty():
 		_show_toast("暫時沒有提示")
 	else:
 		selected_id = int(hint_flash.id)
-		_show_toast("試試這塊方塊！")
+		_show_toast(str(hint_flash.get("msg", "試試這塊方塊！")))
 	queue_redraw()
 
 
