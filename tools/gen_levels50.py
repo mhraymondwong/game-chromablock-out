@@ -387,15 +387,15 @@ def build_levels():
         B("1x1", "yellow", 1, 0),
     ]))
 
-    lv.append(L(11, "窄門過石", 15, 80, [
+    lv.append(L(11, "窄門過石", 14, 80, [
         G("right", 3, 2, "orange"),
         G("top", 0, 1, "blue"),
     ], [
-        B("stone_2v", "stone", 4, 1),
-        B("stone_1", "stone", 2, 4),
-        B("2x2", "orange", 1, 2),
-        B("1x1", "blue", 0, 5),
-        B("1x1", "blue", 6, 0),
+        B("stone_2v", "stone", 5, 0),
+        B("stone_1", "stone", 2, 6),
+        B("2x2", "orange", 1, 3),
+        B("1x1", "blue", 0, 2),
+        B("1x1", "blue", 3, 0),
         B("1x1", "orange", 6, 5),
     ]))
 
@@ -457,9 +457,10 @@ def build_levels():
     ]))
 
     lv.append(L(17, "軌道封鎖", 14, 80, [
-        G("top", 1, 2, "orange"),
+        G("right", 4, 1, "orange"),
+        G("left", 4, 1, "orange"),
         G("right", 5, 1, "purple"),
-        G("bottom", 4, 1, "orange"),
+        G("top", 2, 1, "purple"),
     ], [
         B("1x2", "orange", 1, 4, axis="h"),
         B("1x1", "purple", 5, 5, axis="h"),
@@ -520,19 +521,17 @@ def build_levels():
         B("stone_1", "stone", 6, 4),
     ]))
 
-    lv.append(L(22, "軌道終點", 18, 95, [
+    lv.append(L(22, "軌道終點", 10, 95, [
         G("right", 3, 1, "red"),
-        G("left", 1, 1, "blue"),
-        G("bottom", 6, 1, "yellow"),
-        G("top", 4, 1, "yellow"),
+        G("left", 2, 1, "blue"),
+        G("top", 5, 1, "yellow"),
+        G("bottom", 5, 1, "yellow"),
     ], [
-        B("1x3", "red", 0, 3, axis="h"),
-        B("1x2", "blue", 3, 1, axis="h"),
-        B("2x1", "yellow", 6, 3, axis="v"),
-        B("1x1", "yellow", 4, 5),
+        B("1x2", "red", 0, 3, axis="h"),
+        B("1x1", "blue", 4, 2, axis="h"),
+        B("1x1", "yellow", 5, 4, axis="v"),
         B("stone_1", "stone", 2, 5),
-        B("1x1", "blue", 0, 6),
-        B("1x1", "red", 7, 0),
+        B("stone_1", "stone", 6, 1),
     ]))
 
     # ——— 23–35 L-pieces / order ———
@@ -596,17 +595,16 @@ def build_levels():
         B("1x1", "blue", 0, 6),
     ]))
 
-    lv.append(L(28, "開鎖順序", 18, 90, [
-        G("top", 1, 2, "orange"),
-        G("right", 4, 2, "green"),
+    lv.append(L(28, "開鎖順序", 10, 90, [
+        G("top", 2, 2, "orange"),
+        G("right", 5, 1, "green"),
         G("bottom", 3, 1, "blue"),
     ], [
-        B("L_se", "orange", 1, 2),
-        B("L_ne", "green", 4, 4),
-        B("1x1", "blue", 3, 6),
-        B("stone_1", "stone", 3, 0),
-        B("1x1", "orange", 6, 1),
-        B("1x1", "green", 0, 5),
+        B("L_se", "orange", 2, 1),
+        B("1x1", "green", 3, 5),
+        B("1x1", "blue", 3, 3),
+        B("stone_1", "stone", 0, 4),
+        B("stone_1", "stone", 6, 2),
     ]))
 
     lv.append(L(29, "三色 L 舞", 18, 95, [
@@ -621,17 +619,16 @@ def build_levels():
         B("stone_1", "stone", 6, 2),
     ]))
 
-    lv.append(L(30, "讓路給 L", 18, 95, [
+    lv.append(L(30, "讓路給 L", 10, 95, [
         G("top", 3, 2, "purple"),
-        G("right", 1, 1, "green"),
-        G("left", 5, 2, "green"),
+        G("right", 2, 1, "green"),
+        G("left", 6, 1, "green"),
     ], [
-        B("L_ne", "purple", 3, 3),
-        B("1x2", "green", 1, 1),
-        B("2x1", "green", 5, 5),
-        B("stone_1", "stone", 2, 5),
-        B("1x1", "purple", 0, 6),
-        B("1x1", "green", 7, 0),
+        B("L_ne", "purple", 3, 1),
+        B("1x1", "green", 5, 2),
+        B("1x1", "green", 2, 6),
+        B("stone_1", "stone", 1, 3),
+        B("1x1", "purple", 0, 5),
     ]))
 
     lv.append(L(31, "軸上的 L", 18, 95, [
@@ -684,18 +681,16 @@ def build_levels():
         B("stone_1", "stone", 7, 3),
     ]))
 
-    lv.append(L(35, "L 型終章", 22, 110, [
+    lv.append(L(35, "L 型終章", 12, 110, [
         G("right", 2, 2, "red"),
         G("left", 5, 2, "yellow"),
         G("bottom", 3, 2, "green"),
     ], [
-        B("L_ne", "red", 3, 2),
+        B("L_ne", "red", 4, 2),
         B("L_sw", "yellow", 1, 5),
-        B("L_se", "green", 4, 4),
+        B("L_se", "green", 3, 5),
         B("stone_1", "stone", 0, 1),
         B("stone_1", "stone", 6, 0),
-        B("1x1", "red", 7, 6),
-        B("1x1", "green", 0, 3),
     ]))
 
     # ——— 36–50 ice + multi ———
@@ -724,16 +719,16 @@ def build_levels():
         B("1x1", "red", 0, 0),
     ]))
 
-    lv.append(L(38, "冰層雙重", 16, 100, [
+    lv.append(L(38, "冰層雙重", 12, 100, [
         G("top", 1, 1, "yellow"),
         G("right", 3, 2, "purple"),
         G("bottom", 5, 1, "yellow"),
     ], [
-        B("1x1", "yellow", 1, 3),
-        B("1x1", "yellow", 5, 5),
-        B("2x2", "purple", 3, 2, ice=1),
+        B("1x1", "yellow", 1, 2),
+        B("1x1", "yellow", 5, 4),
+        B("2x2", "purple", 3, 3, ice=1),
         B("1x1", "purple", 0, 6, ice=2),
-        B("stone_1", "stone", 6, 4),
+        B("stone_1", "stone", 6, 1),
     ]))
 
     lv.append(L(39, "軸向解凍", 16, 100, [
@@ -774,17 +769,17 @@ def build_levels():
         B("1x1", "red", 0, 6),
     ]))
 
-    lv.append(L(42, "冰封軌道", 18, 110, [
+    lv.append(L(42, "冰封軌道", 12, 110, [
         G("right", 3, 1, "purple"),
-        G("top", 1, 2, "green"),
+        G("top", 1, 1, "green"),
         G("bottom", 5, 1, "purple"),
     ], [
-        B("1x2", "purple", 2, 3, axis="h"),
-        B("1x2", "green", 1, 5, axis="h"),
-        B("2x1", "green", 4, 0, ice=1),
-        B("1x1", "purple", 5, 6, ice=2),
-        B("stone_1", "stone", 0, 1),
-        B("1x1", "green", 7, 2),
+        B("1x2", "purple", 1, 3, axis="h"),
+        B("1x1", "green", 1, 2),
+        B("1x1", "green", 4, 0, ice=1),
+        B("1x1", "purple", 5, 6, ice=1),
+        B("stone_1", "stone", 0, 5),
+        B("stone_1", "stone", 6, 1),
     ]))
 
     lv.append(L(43, "解凍 L 舞", 20, 115, [
@@ -827,18 +822,16 @@ def build_levels():
         B("1x1", "blue", 7, 1),
     ]))
 
-    lv.append(L(46, "終盤暖身", 22, 125, [
+    lv.append(L(46, "終盤暖身", 12, 125, [
         G("top", 2, 2, "green"),
         G("right", 4, 2, "orange"),
         G("left", 6, 1, "purple"),
     ], [
-        B("1x1", "purple", 6, 3),
-        B("L_nw", "green", 2, 2, ice=1),
+        B("1x1", "purple", 3, 6),
+        B("L_nw", "green", 2, 1, ice=1),
         B("L_se", "orange", 4, 4, ice=1),
-        B("stone_1", "stone", 1, 5),
-        B("1x1", "purple", 0, 7),
-        B("1x1", "green", 5, 0),
-        B("1x1", "orange", 0, 0),
+        B("stone_1", "stone", 0, 3),
+        B("1x1", "purple", 6, 2),
     ]))
 
     lv.append(L(47, "深凍迷宮", 24, 130, [
@@ -856,54 +849,47 @@ def build_levels():
         B("1x1", "red", 7, 6),
     ]))
 
-    lv.append(L(48, "四色冰封", 24, 130, [
+    lv.append(L(48, "四色冰封", 14, 130, [
         G("right", 2, 1, "red"),
         G("left", 5, 1, "blue"),
         G("top", 3, 2, "green"),
         G("bottom", 0, 2, "yellow"),
     ], [
-        B("1x1", "red", 5, 2),
-        B("1x1", "blue", 2, 5),
-        B("L_ne", "green", 3, 1, ice=1),
-        B("L_sw", "yellow", 0, 4, ice=2),
-        B("stone_1", "stone", 1, 2),
-        B("stone_1", "stone", 6, 6),
-        B("1x1", "green", 7, 0),
-        B("1x1", "yellow", 4, 7),
+        B("1x1", "red", 4, 2),
+        B("1x1", "blue", 3, 5),
+        B("L_ne", "green", 3, 0, ice=1),
+        B("L_sw", "yellow", 0, 5, ice=2),
+        B("stone_1", "stone", 6, 3),
+        B("stone_1", "stone", 2, 3),
     ]))
 
-    lv.append(L(49, "終極解凍", 26, 140, [
+    lv.append(L(49, "終極解凍", 14, 140, [
         G("right", 1, 2, "orange"),
         G("left", 4, 2, "purple"),
         G("bottom", 3, 1, "red"),
         G("top", 6, 1, "red"),
     ], [
-        B("1x1", "red", 3, 3),
-        B("1x1", "red", 6, 5),
+        B("1x1", "red", 3, 2),
+        B("1x1", "red", 6, 4),
         B("L_se", "orange", 4, 1, ice=1),
         B("L_nw", "purple", 1, 4, ice=2),
-        B("stone_1", "stone", 0, 1),
+        B("stone_1", "stone", 0, 0),
         B("stone_1", "stone", 5, 6),
-        B("1x1", "orange", 0, 7),
-        B("1x1", "purple", 7, 0),
     ]))
 
-    lv.append(L(50, "逃脫終章", 28, 150, [
+    lv.append(L(50, "逃脫終章", 16, 150, [
         G("right", 2, 2, "red"),
         G("left", 5, 2, "blue"),
         G("top", 0, 2, "green"),
         G("bottom", 3, 2, "yellow"),
     ], [
-        B("1x1", "green", 1, 3),
+        B("1x1", "green", 1, 2),
         B("1x1", "yellow", 4, 5),
-        B("L_ne", "red", 3, 2, ice=1),
+        B("L_ne", "red", 4, 2, ice=1),
         B("L_sw", "blue", 1, 5, ice=2),
-        B("2x2", "yellow", 5, 3, ice=2),
-        B("1x2", "green", 4, 0, axis="h"),
-        B("stone_1", "stone", 0, 4),
-        B("stone_1", "stone", 6, 1),
-        B("1x1", "red", 7, 7),
-        B("1x1", "blue", 7, 0),
+        B("1x2", "green", 3, 0),
+        B("stone_1", "stone", 6, 4),
+        B("stone_1", "stone", 0, 3),
     ]))
 
     assert len(lv) == 50, len(lv)
